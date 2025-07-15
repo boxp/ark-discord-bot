@@ -74,7 +74,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: ${{ env.AWS_REGION }}
-        role-to-assume: 'arn:aws:iam::839695154978:role/ark-discord-bot-role'
+        role-to-assume: 'arn:aws:iam::839695154978:role/ark-discord-bot-gha-role'
 
     - name: Login to Amazon ECR
       id: login-ecr
