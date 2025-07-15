@@ -1,80 +1,80 @@
 # ARK Discord Bot
 
-A Discord bot for managing ARK: Survival Ascended server running in Kubernetes. This bot provides server management capabilities through Discord commands and automated server status notifications with RCON-based connectivity verification.
+Kubernetesで稼働するARK: Survival Ascendedサーバーを管理するためのDiscord botです。Discordコマンドによるサーバー管理機能とRCONベースの接続確認による自動サーバーステータス通知を提供します。
 
-## Features
+## 機能
 
-🔄 **Server Management**
-- Restart ARK server using Kubernetes rollout restart
-- Comprehensive server status checking with RCON connectivity validation
-- Real-time server readiness detection
+🔄 **サーバー管理**
+- Kubernetesのrollout restartを使用したARKサーバーの再起動
+- RCON接続確認による包括的なサーバーステータスチェック
+- リアルタイムでのサーバー準備状態検出
 
-👥 **Player Management** 
-- List current online players via RCON
-- Real-time player information
+👥 **プレイヤー管理** 
+- RCONを介した現在オンラインのプレイヤー一覧表示
+- リアルタイムプレイヤー情報
 
-🔔 **Smart Notifications**
-- Automatic notifications when server becomes ready for connections
-- Differentiate between pod startup and actual game server readiness
-- Server status change alerts with detailed state information
-- Error notifications
+🔔 **スマート通知**
+- サーバーが接続可能状態になった際の自動通知
+- ポッドの起動と実際のゲームサーバー準備状態の区別
+- 詳細なステータス情報によるサーバー状態変更アラート
+- エラー通知
 
-❓ **Help System**
-- Interactive help command with usage examples
+❓ **ヘルプシステム**
+- 使用例付きの対話型ヘルプコマンド
 
-## Discord Commands
+## Discordコマンド
 
-- `!ark help` - Display help information
-- `!ark status` - Check comprehensive server status (K8s + RCON connectivity)
-- `!ark restart` - Restart the ARK server
-- `!ark players` - List current online players
+- `!ark help` - ヘルプ情報を表示
+- `!ark status` - 包括的なサーバーステータスをチェック（K8s + RCON接続性）
+- `!ark restart` - ARKサーバーを再起動
+- `!ark players` - 現在オンラインのプレイヤー一覧を表示
 
-### Server Status States
+### サーバーステータス状態
 
-The `!ark status` command now provides detailed server state information:
+`!ark status`コマンドは詳細なサーバー状態情報を提供します：
 
-- 🟢 **Running**: Server is ready and accepting connections (RCON accessible)
-- 🟡 **Starting**: Kubernetes pods are running but game server is still initializing
-- 🟡 **Not Ready**: Kubernetes deployment is not ready
-- 🔴 **Error**: Server encountered an error
+- 🟢 **Running**: サーバーが準備完了で接続を受け付けています（RCON接続可能）
+- 🟡 **Starting**: Kubernetesポッドは稼働中ですが、ゲームサーバーはまだ初期化中
+- 🟡 **Not Ready**: Kubernetesデプロイメントが準備未完了
+- 🔴 **Error**: サーバーでエラーが発生
 
-## Architecture
+## アーキテクチャ
 
-This project follows Test-Driven Development (TDD) principles and uses:
+このプロジェクトはテスト駆動開発（TDD）の原則に従い、以下を使用しています：
 
-- **Kubernetes API** - For server restart and pod status monitoring
-- **RCON Protocol** - For server connectivity validation and player information
-- **Discord.py** - For Discord bot functionality
-- **AsyncIO** - For concurrent operations
-- **uv** - For fast Python package management and virtual environments
-- **Pytest** - For comprehensive testing (37 test cases)
+- **Kubernetes API** - サーバー再起動とポッドステータス監視
+- **RCONプロトコル** - サーバー接続確認とプレイヤー情報取得
+- **Discord.py** - Discord bot機能
+- **AsyncIO** - 並行処理
+- **uv** - 高速Pythonパッケージ管理と仮想環境
+- **Pytest** - 包括的テスト（37テストケース）
 
-### Key Components
+### 主要コンポーネント
 
-- `KubernetesManager` - Handles Kubernetes operations
-- `RconManager` - Manages RCON communication with ARK server
-- `ServerStatusChecker` - Comprehensive server status validation using K8s + RCON
-- `ServerMonitor` - Monitors server status changes with smart notifications
-- `ArkDiscordBot` - Main Discord bot implementation
+- `KubernetesManager` - Kubernetes操作を処理
+- `RconManager` - ARKサーバーとのRCON通信を管理
+- `ServerStatusChecker` - K8s + RCONを使用した包括的サーバーステータス検証
+- `ServerMonitor` - スマート通知でサーバーステータス変更を監視
+- `ArkDiscordBot` - メインのDiscord bot実装
 
-## Setup Instructions
+## セットアップ手順
 
-### Prerequisites
+### 前提条件
 
-- Python 3.10+ (3.11+ recommended)
-- [uv](https://docs.astral.sh/uv/) - Python package manager
-- Kubernetes cluster with ARK server deployed
-- Discord bot token
-- RCON access to ARK server
+- Python 3.10+（3.11+推奨）
+- [uv](https://docs.astral.sh/uv/) - Pythonパッケージマネージャー
+- ARKサーバーがデプロイされたKubernetesクラスター
+- Discord botトークン
+- ARKサーバーへのRCONアクセス
 
-### Environment Configuration
+### 環境設定
 
-1. Copy `.env.example` to `.env`:
+1. `.env.example`を`.env`にコピー：
 ```bash
 cp .env.example .env
 ```
 
-2. Configure your settings in `.env`:
+2. `.env`で設定を構成：
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_CHANNEL_ID=your_discord_channel_id_here
@@ -86,222 +86,222 @@ RCON_PORT=27020
 RCON_PASSWORD=your_rcon_password_here
 ```
 
-### Local Development
+### ローカル開発
 
-1. Install uv if not already installed:
+1. uvがインストールされていない場合はインストール：
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. Create virtual environment and install dependencies:
+2. 仮想環境を作成し依存関係をインストール：
 ```bash
 uv venv
 uv pip install -r requirements.txt
 ```
 
-3. Run tests:
+3. テストを実行：
 ```bash
 uv run pytest tests/ -v
 ```
 
-4. Run the bot:
+4. botを実行：
 ```bash
 uv run python -m src.ark_discord_bot.main
 ```
 
-### Alternative: Traditional Python Setup
+### 代替案：従来のPythonセットアップ
 
-If you prefer using traditional Python tools:
+従来のPythonツールを使用したい場合：
 
-1. Create virtual environment:
+1. 仮想環境を作成：
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 ```
 
-2. Install dependencies:
+2. 依存関係をインストール：
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run tests:
+3. テストを実行：
 ```bash
 pytest tests/ -v
 ```
 
-### Docker Deployment
+### Dockerデプロイメント
 
-1. Build image:
+1. イメージをビルド：
 ```bash
 docker build -t ark-discord-bot:latest .
 ```
 
-2. Run with Docker Compose:
+2. Docker Composeで実行：
 ```bash
 docker-compose up -d
 ```
 
-### Kubernetes Deployment
+### Kubernetesデプロイメント
 
-1. Update secrets in `k8s/secret.yaml` with base64 encoded values:
+1. `k8s/secret.yaml`でシークレットをbase64エンコードした値で更新：
 ```bash
 echo -n "your_discord_bot_token" | base64
 echo -n "123456789" | base64  # channel ID
 echo -n "your_rcon_password" | base64
 ```
 
-2. Deploy to Kubernetes:
+2. Kubernetesにデプロイ：
 ```bash
 kubectl apply -k k8s/
 ```
 
-## Development
+## 開発
 
-### Project Structure
+### プロジェクト構造
 
 ```
 ark-discord-bot/
-├── src/ark_discord_bot/          # Main application code
+├── src/ark_discord_bot/          # メインアプリケーションコード
 │   ├── __init__.py
-│   ├── main.py                   # Application entry point
-│   ├── config.py                 # Configuration management
-│   ├── discord_bot.py            # Discord bot implementation
-│   ├── kubernetes_manager.py     # Kubernetes operations
-│   ├── rcon_manager.py          # RCON communication
-│   ├── server_status_checker.py # RCON-based server status validation
-│   └── server_monitor.py        # Server status monitoring
-├── tests/                        # Test files (TDD approach - 37 tests)
-│   ├── test_discord_bot_simple.py     # Discord bot tests
-│   ├── test_kubernetes_manager.py     # Kubernetes operations tests
-│   ├── test_rcon_manager.py          # RCON communication tests
-│   ├── test_server_status_checker.py # Server status validation tests
-│   └── test_server_monitor.py        # Server monitoring tests
-├── k8s/                          # Kubernetes manifests
+│   ├── main.py                   # アプリケーションエントリーポイント
+│   ├── config.py                 # 設定管理
+│   ├── discord_bot.py            # Discord bot実装
+│   ├── kubernetes_manager.py     # Kubernetes操作
+│   ├── rcon_manager.py          # RCON通信
+│   ├── server_status_checker.py # RCONベースサーバーステータス検証
+│   └── server_monitor.py        # サーバーステータス監視
+├── tests/                        # テストファイル（TDDアプローチ - 37テスト）
+│   ├── test_discord_bot_simple.py     # Discord botテスト
+│   ├── test_kubernetes_manager.py     # Kubernetes操作テスト
+│   ├── test_rcon_manager.py          # RCON通信テスト
+│   ├── test_server_status_checker.py # サーバーステータス検証テスト
+│   └── test_server_monitor.py        # サーバー監視テスト
+├── k8s/                          # Kubernetesマニフェスト
 │   ├── namespace.yaml
 │   ├── configmap.yaml
 │   ├── secret.yaml
 │   ├── rbac.yaml
 │   ├── deployment.yaml
 │   └── kustomization.yaml
-├── requirements.txt              # Python dependencies
-├── uv.lock                      # uv lockfile for reproducible installs
-├── pyproject.toml               # Project configuration
-├── Dockerfile                   # Docker image
-├── docker-compose.yml           # Docker Compose setup
-├── Makefile                     # Development commands
-└── README.md                    # This file
+├── requirements.txt              # Python依存関係
+├── uv.lock                      # uv再現可能インストール用ロックファイル
+├── pyproject.toml               # プロジェクト設定
+├── Dockerfile                   # Dockerイメージ
+├── docker-compose.yml           # Docker Composeセットアップ
+├── Makefile                     # 開発コマンド
+└── README.md                    # このファイル
 ```
 
-### Testing
+### テスト
 
-The project uses pytest with comprehensive test coverage (37 test cases):
+プロジェクトは包括的なテストカバレッジでpytestを使用（37テストケース）：
 
 ```bash
-# Run all tests with uv
+# uvですべてのテストを実行
 uv run pytest tests/ -v
 
-# Run specific test file
+# 特定のテストファイルを実行
 uv run pytest tests/test_server_status_checker.py -v
 
-# Run with coverage
+# カバレッジ付きで実行
 uv run pytest tests/ --cov=src/ark_discord_bot
 
-# Alternative: Traditional pytest (if virtual environment is activated)
+# 代替案：従来のpytest（仮想環境が有効化されている場合）
 pytest tests/ -v
 ```
 
-#### Test Coverage
+#### テストカバレッジ
 
-- **Discord Bot Tests**: Command handling and response validation
-- **Kubernetes Manager Tests**: Deployment restart and status checking
-- **RCON Manager Tests**: Protocol communication and player listing
-- **Server Status Checker Tests**: RCON connectivity validation
-- **Server Monitor Tests**: Status change notifications and monitoring logic
+- **Discord Botテスト**: コマンド処理とレスポンス検証
+- **Kubernetes Managerテスト**: デプロイメント再起動とステータスチェック
+- **RCON Managerテスト**: プロトコル通信とプレイヤー一覧
+- **Server Status Checkerテスト**: RCON接続確認検証
+- **Server Monitorテスト**: ステータス変更通知と監視ロジック
 
-### Development Commands
+### 開発コマンド
 
-#### Using uv (Recommended)
+#### uvを使用（推奨）
 
 ```bash
-# Setup development environment
+# 開発環境のセットアップ
 uv venv && uv pip install -r requirements.txt
 
-# Run tests
+# テストを実行
 uv run pytest tests/ -v
 
-# Format code
+# コードをフォーマット
 uv run black src/ tests/
 uv run isort src/ tests/
 
-# Lint code
+# コードをリント
 uv run pylint src/ark_discord_bot/
 
-# Run the bot
+# botを実行
 uv run python -m src.ark_discord_bot.main
 ```
 
-#### Using Makefile
+#### Makefileを使用
 
-Use the Makefile for common development tasks:
+共通の開発タスクにMakefileを使用：
 
 ```bash
-make help          # Show available commands
-make install       # Install dependencies
-make test          # Run tests
-make docker-build  # Build Docker image
-make k8s-deploy    # Deploy to Kubernetes
+make help          # 利用可能なコマンドを表示
+make install       # 依存関係をインストール
+make test          # テストを実行
+make docker-build  # Dockerイメージをビルド
+make k8s-deploy    # Kubernetesにデプロイ
 ```
 
-## Security
+## セキュリティ
 
-- Runs as non-root user (UID 10000)
-- Read-only root filesystem
-- Minimal RBAC permissions
-- Secrets managed via Kubernetes secrets
-- No privilege escalation
+- 非rootユーザーとして実行（UID 10000）
+- 読み取り専用ルートファイルシステム
+- 最小限のRBAC権限
+- Kubernetesシークレットでシークレット管理
+- 権限昇格なし
 
-## Monitoring
+## 監視
 
-The bot includes:
-- Health checks for Docker and Kubernetes
-- Comprehensive logging
-- Server status monitoring
-- Error handling and recovery
+botには以下が含まれています：
+- DockerとKubernetes用ヘルスチェック
+- 包括的ログ記録
+- サーバーステータス監視
+- エラー処理と復旧
 
-## Troubleshooting
+## トラブルシューティング
 
-### Common Issues
+### よくある問題
 
-1. **Bot not responding to commands**
-   - Check Discord bot token
-   - Verify bot has proper permissions in Discord server
-   - Check logs for connection errors
+1. **botがコマンドに応答しない**
+   - Discord botトークンを確認
+   - botがDiscordサーバーで適切な権限を持っているか確認
+   - 接続エラーのログを確認
 
-2. **Kubernetes operations failing**
-   - Verify RBAC permissions
-   - Check if bot can access the ark-survival-ascended namespace
-   - Ensure deployment name matches configuration
+2. **Kubernetes操作が失敗する**
+   - RBAC権限を確認
+   - botがark-survival-ascendedネームスペースにアクセスできるか確認
+   - デプロイメント名が設定と一致するか確認
 
-3. **RCON connection issues**
-   - Verify RCON host and port
-   - Check RCON password
-   - Ensure ARK server has RCON enabled
-   - Test RCON connectivity manually
+3. **RCON接続の問題**
+   - RCONホストとポートを確認
+   - RCONパスワードを確認
+   - ARKサーバーでRCONが有効になっているか確認
+   - RCON接続を手動でテスト
 
-4. **Server status showing "starting" for too long**
-   - Check if ARK server is actually ready (may take 5-10 minutes after pod start)
-   - Verify RCON connectivity to the server
-   - Check server initialization logs
+4. **サーバーステータスが長時間"starting"を表示**
+   - ARKサーバーが実際に準備完了しているか確認（ポッド開始後5-10分かかる場合があります）
+   - サーバーへのRCON接続を確認
+   - サーバー初期化ログを確認
 
-5. **Server monitoring not working**
-   - Check Kubernetes API connectivity
-   - Verify namespace and deployment names
-   - Review monitoring interval settings
-   - Ensure ServerStatusChecker is working correctly
+5. **サーバー監視が動作しない**
+   - Kubernetes API接続を確認
+   - ネームスペースとデプロイメント名を確認
+   - 監視間隔設定を確認
+   - ServerStatusCheckerが正しく動作しているか確認
 
-### Logs
+### ログ
 
-Check application logs:
+アプリケーションログの確認：
 ```bash
 # Docker
 docker logs ark-discord-bot
@@ -309,38 +309,38 @@ docker logs ark-discord-bot
 # Kubernetes  
 kubectl logs -f deployment/ark-discord-bot -n ark-discord-bot
 
-# Local development
+# ローカル開発
 tail -f ark_discord_bot.log
 ```
 
-## Recent Updates
+## 最新の更新
 
-### v2.0 - RCON-Based Server Status Validation
+### v2.0 - RCONベースサーバーステータス検証
 
-- **Enhanced Server Status Checking**: Now uses RCON connectivity to verify actual server readiness
-- **Smart State Detection**: Distinguishes between pod startup and game server initialization
-- **Improved Notifications**: More accurate server ready notifications
-- **Comprehensive Testing**: 37 test cases covering all scenarios
-- **uv Integration**: Fast dependency management and virtual environment handling
+- **強化されたサーバーステータスチェック**: 実際のサーバー準備状態を確認するためにRCON接続を使用
+- **スマートステート検出**: ポッドの起動とゲームサーバーの初期化を区別
+- **改善された通知**: より正確なサーバー準備通知
+- **包括的テスト**: すべてのシナリオをカバーする37テストケース
+- **uv統合**: 高速依存関係管理と仮想環境処理
 
-### Server Status Flow
+### サーバーステータスフロー
 
-1. **Kubernetes Check**: Verify pod is running
-2. **RCON Validation**: Test actual game server connectivity
-3. **State Determination**: 
-   - If both pass → "Running" 
-   - If K8s passes but RCON fails → "Starting"
-   - If K8s fails → "Not Ready"
-   - If errors occur → "Error"
+1. **Kubernetesチェック**: ポッドが稼働中か確認
+2. **RCON検証**: 実際のゲームサーバー接続をテスト
+3. **ステート判定**: 
+   - 両方とも成功 → "Running" 
+   - K8sは成功だがRCONが失敗 → "Starting"
+   - K8sが失敗 → "Not Ready"
+   - エラーが発生 → "Error"
 
-## Contributing
+## 貢献
 
-1. Follow TDD principles - write tests first
-2. Use uv for dependency management: `uv run pytest tests/ -v`
-3. Ensure all 37 tests pass before submitting PR
-4. Use meaningful commit messages
-5. Update documentation as needed
+1. TDDの原則に従う - テストを最初に書く
+2. 依存関係管理にuvを使用: `uv run pytest tests/ -v`
+3. PRを提出する前に37のテストすべてが成功することを確認
+4. 意味のあるコミットメッセージを使用
+5. 必要に応じてドキュメントを更新
 
-## License
+## ライセンス
 
-This project is licensed under the MIT License.
+このプロジェクトはMITライセンスの下でライセンスされています。
