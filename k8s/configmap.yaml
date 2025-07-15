@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ark-discord-bot-config
+  namespace: ark-discord-bot
+data:
+  KUBERNETES_NAMESPACE: "ark-survival-ascended"
+  KUBERNETES_DEPLOYMENT_NAME: "ark-server"
+  KUBERNETES_SERVICE_NAME: "ark-server-service"
+  RCON_HOST: "192.168.10.29"
+  RCON_PORT: "27020"
+  MONITORING_INTERVAL: "30"
+  LOG_LEVEL: "INFO"

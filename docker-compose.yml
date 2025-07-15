@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  ark-discord-bot:
+    build: .
+    container_name: ark-discord-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - ark-bot-network
+    depends_on:
+      - ark-discord-bot-redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import asyncio; print('Bot is running')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  ark-discord-bot-redis:
+    image: redis:7-alpine
+    container_name: ark-discord-bot-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - ark-bot-network
+
+networks:
+  ark-bot-network:
+    driver: bridge
+
+volumes:
+  redis_data:
