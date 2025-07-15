@@ -40,12 +40,12 @@ class RconManager:
             if response:
                 # Parse the response to extract player names
                 players = []
-                lines = response.split('\n')
+                lines = response.split("\n")
                 for line in lines:
                     line = line.strip()
-                    if line and not line.startswith('No') and ', ' in line:
+                    if line and not line.startswith("No") and ", " in line:
                         # Extract player name (format: "PlayerName, SteamID")
-                        parts = line.split(', ')
+                        parts = line.split(", ")
                         if len(parts) >= 2:
                             players.append(parts[0])
                 return players
@@ -83,7 +83,7 @@ class RconManager:
             await writer.wait_closed()
 
             if response and response[0] == self.SERVERDATA_RESPONSE_VALUE:
-                return response[1].decode('utf-8', errors='ignore').strip()
+                return response[1].decode("utf-8", errors="ignore").strip()
 
             return None
 
@@ -91,7 +91,9 @@ class RconManager:
             logger.error(f"Error sending RCON command: {e}")
             return None
 
-    async def _authenticate(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bool:
+    async def _authenticate(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> bool:
         """Authenticate with RCON server.
 
         Args:
@@ -117,7 +119,9 @@ class RconManager:
             logger.error(f"RCON authentication failed: {e}")
             return False
 
-    async def _send_packet(self, writer: asyncio.StreamWriter, packet_type: int, data: str):
+    async def _send_packet(
+        self, writer: asyncio.StreamWriter, packet_type: int, data: str
+    ):
         """Send RCON packet.
 
         Args:
@@ -126,17 +130,17 @@ class RconManager:
             data: Data to send
         """
         packet_id = 1
-        data_bytes = data.encode('utf-8')
+        data_bytes = data.encode("utf-8")
 
         # Calculate packet size
         packet_size = 4 + 4 + len(data_bytes) + 2  # id + type + data + null terminators
 
         # Build packet
-        packet = struct.pack('<I', packet_size)  # Size
-        packet += struct.pack('<I', packet_id)   # ID
-        packet += struct.pack('<I', packet_type) # Type
-        packet += data_bytes                     # Data
-        packet += b'\x00\x00'                   # Null terminators
+        packet = struct.pack("<I", packet_size)  # Size
+        packet += struct.pack("<I", packet_id)  # ID
+        packet += struct.pack("<I", packet_type)  # Type
+        packet += data_bytes  # Data
+        packet += b"\x00\x00"  # Null terminators
 
         writer.write(packet)
         await writer.drain()
@@ -156,7 +160,7 @@ class RconManager:
             if len(size_data) < 4:
                 return None
 
-            packet_size = struct.unpack('<I', size_data)[0]
+            packet_size = struct.unpack("<I", size_data)[0]
 
             # Read packet data
             packet_data = await reader.read(packet_size)
@@ -164,8 +168,8 @@ class RconManager:
                 return None
 
             # Parse packet
-            packet_id = struct.unpack('<I', packet_data[0:4])[0]
-            packet_type = struct.unpack('<I', packet_data[4:8])[0]
+            packet_id = struct.unpack("<I", packet_data[0:4])[0]
+            packet_type = struct.unpack("<I", packet_data[4:8])[0]
             data = packet_data[8:-2]  # Remove null terminators
 
             return (packet_type, data)

@@ -28,7 +28,7 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest tests/test_discord_bot_simple.py tests/test_rcon_manager.py tests/test_server_monitor.py tests/test_kubernetes_manager.py -v
+        pytest tests/test_discord_bot_simple.py tests/test_rcon_manager.py tests/test_kubernetes_manager.py tests/test_server_monitor.py tests/test_server_status_checker.py -v
 
 
   lint:

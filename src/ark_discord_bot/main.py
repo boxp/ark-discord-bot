@@ -29,20 +29,20 @@ class ArkBotApplication:
 
     def setup_logging(self):
         """Setup logging configuration."""
-        log_level = getattr(logging, self.config['log_level'].upper(), logging.INFO)
+        log_level = getattr(logging, self.config["log_level"].upper(), logging.INFO)
 
         logging.basicConfig(
             level=log_level,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             handlers=[
                 logging.StreamHandler(sys.stdout),
-                logging.FileHandler('ark_discord_bot.log')
-            ]
+                logging.FileHandler("ark_discord_bot.log"),
+            ],
         )
 
         # Reduce discord.py logging level
-        logging.getLogger('discord').setLevel(logging.WARNING)
-        logging.getLogger('discord.http').setLevel(logging.WARNING)
+        logging.getLogger("discord").setLevel(logging.WARNING)
+        logging.getLogger("discord.http").setLevel(logging.WARNING)
 
     async def start(self):
         """Start the bot application."""
@@ -55,10 +55,10 @@ class ArkBotApplication:
 
             # Initialize server monitor
             self.monitor = ServerMonitor(
-                kubernetes_manager=self.bot.kubernetes_manager,
+                server_status_checker=self.bot.server_status_checker,
                 discord_bot=self.bot,
-                channel_id=self.config['channel_id'],
-                check_interval=self.config['monitoring_interval']
+                channel_id=self.config["channel_id"],
+                check_interval=self.config["monitoring_interval"],
             )
 
             # Start monitoring task
@@ -66,7 +66,7 @@ class ArkBotApplication:
 
             # Start bot
             logger.info("Connecting to Discord...")
-            await self.bot.start(self.config['discord_token'])
+            await self.bot.start(self.config["discord_token"])
 
         except Exception as e:
             logger = logging.getLogger(__name__)

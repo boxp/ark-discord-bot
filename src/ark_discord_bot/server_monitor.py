@@ -10,16 +10,22 @@ logger = logging.getLogger(__name__)
 class ServerMonitor:
     """Monitors ARK server status and sends notifications."""
 
-    def __init__(self, kubernetes_manager, discord_bot, channel_id: int, check_interval: int = 30):
+    def __init__(
+        self,
+        server_status_checker,
+        discord_bot,
+        channel_id: int,
+        check_interval: int = 30,
+    ):
         """Initialize ServerMonitor.
 
         Args:
-            kubernetes_manager: KubernetesManager instance
+            server_status_checker: ServerStatusChecker instance
             discord_bot: Discord bot instance
             channel_id: Discord channel ID for notifications
             check_interval: Status check interval in seconds
         """
-        self.kubernetes_manager = kubernetes_manager
+        self.server_status_checker = server_status_checker
         self.discord_bot = discord_bot
         self.channel_id = channel_id
         self.check_interval = check_interval
@@ -53,12 +59,12 @@ class ServerMonitor:
         Returns:
             str: Current server status
         """
-        return await self.kubernetes_manager.get_server_status()
+        return await self.server_status_checker.get_server_status()
 
     async def _check_server_status(self):
         """Check server status and send notifications if changed."""
         try:
-            current_status = await self.kubernetes_manager.get_server_status()
+            current_status = await self.server_status_checker.get_server_status()
 
             if self.last_status != current_status:
                 await self._send_status_notification(current_status, self.last_status)
@@ -67,7 +73,9 @@ class ServerMonitor:
         except Exception as e:
             logger.error(f"Error checking server status: {e}")
 
-    async def _send_status_notification(self, current_status: str, previous_status: Optional[str]):
+    async def _send_status_notification(
+        self, current_status: str, previous_status: Optional[str]
+    ):
         """Send notification about status change.
 
         Args:
@@ -79,7 +87,12 @@ class ServerMonitor:
 
             if current_status == "running" and previous_status != "running":
                 message = "🟢 ARK Server is now ready for connections! 🦕"
-            elif current_status == "not_ready" and previous_status == "running":
+            elif current_status == "starting" and previous_status == "not_ready":
+                message = "🟡 ARK Server pods are running, game server starting up..."
+            elif (
+                current_status in ["not_ready", "starting"]
+                and previous_status == "running"
+            ):
                 message = "🟡 ARK Server is restarting or not ready..."
             elif current_status == "error":
                 message = "🔴 ARK Server encountered an error! Please check the logs."

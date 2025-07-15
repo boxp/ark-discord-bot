@@ -64,7 +64,7 @@ class KubernetesManager:
                 apps_v1.patch_namespaced_deployment,
                 self.deployment_name,
                 self.namespace,
-                patch_body
+                patch_body,
             )
 
             logger.info(f"Successfully triggered restart for {self.deployment_name}")
@@ -90,10 +90,13 @@ class KubernetesManager:
                 None,
                 apps_v1.read_namespaced_deployment,
                 self.deployment_name,
-                self.namespace
+                self.namespace,
             )
 
-            if deployment.status.ready_replicas and deployment.status.ready_replicas > 0:
+            if (
+                deployment.status.ready_replicas
+                and deployment.status.ready_replicas > 0
+            ):
                 return "running"
             else:
                 return "not_ready"

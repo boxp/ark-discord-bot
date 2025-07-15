@@ -1,13 +1,14 @@
 """Discord bot for ARK server management."""
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 import discord
 from discord.ext import commands
 
 from .kubernetes_manager import KubernetesManager
 from .rcon_manager import RconManager
+from .server_status_checker import ServerStatusChecker
 
 logger = logging.getLogger(__name__)
 
@@ -24,22 +25,27 @@ class ArkDiscordBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
 
-        super().__init__(command_prefix='!ark ', intents=intents, help_command=None)
+        super().__init__(command_prefix="!ark ", intents=intents, help_command=None)
 
         self.config = config
-        self.channel_id = config['channel_id']
+        self.channel_id = config["channel_id"]
 
         # Initialize managers
         self.kubernetes_manager = KubernetesManager(
-            namespace=config['kubernetes_namespace'],
-            deployment_name=config['kubernetes_deployment_name'],
-            service_name=config['kubernetes_service_name']
+            namespace=config["kubernetes_namespace"],
+            deployment_name=config["kubernetes_deployment_name"],
+            service_name=config["kubernetes_service_name"],
         )
 
         self.rcon_manager = RconManager(
-            host=config['rcon_host'],
-            port=config['rcon_port'],
-            password=config['rcon_password']
+            host=config["rcon_host"],
+            port=config["rcon_port"],
+            password=config["rcon_password"],
+        )
+
+        self.server_status_checker = ServerStatusChecker(
+            kubernetes_manager=self.kubernetes_manager,
+            rcon_manager=self.rcon_manager,
         )
 
         # Add commands
@@ -47,19 +53,20 @@ class ArkDiscordBot(commands.Bot):
 
     def add_commands(self):
         """Add bot commands."""
-        @self.command(name='help')
+
+        @self.command(name="help")
         async def help_cmd(ctx):
             await self.help_command(ctx)
 
-        @self.command(name='restart')
+        @self.command(name="restart")
         async def restart_cmd(ctx):
             await self.restart_command(ctx)
 
-        @self.command(name='players')
+        @self.command(name="players")
         async def players_cmd(ctx):
             await self.players_command(ctx)
 
-        @self.command(name='status')
+        @self.command(name="status")
         async def status_cmd(ctx):
             await self.status_command(ctx)
 
@@ -90,9 +97,13 @@ class ArkDiscordBot(commands.Bot):
             success = await self.kubernetes_manager.restart_server()
 
             if success:
-                await ctx.send("🔄 ARK Server restart initiated! Please wait for the server to come back online.")
+                await ctx.send(
+                    "🔄 ARK Server restart initiated! Please wait for the server to come back online."
+                )
             else:
-                await ctx.send("❌ Failed to restart ARK Server. Please check the logs or contact an administrator.")
+                await ctx.send(
+                    "❌ Failed to restart ARK Server. Please check the logs or contact an administrator."
+                )
 
         except Exception as e:
             logger.error(f"Error in restart command: {e}")
@@ -113,15 +124,19 @@ class ArkDiscordBot(commands.Bot):
 
         except Exception as e:
             logger.error(f"Error in players command: {e}")
-            await ctx.send("❌ Failed to get player information. Server might be offline or RCON unavailable.")
+            await ctx.send(
+                "❌ Failed to get player information. Server might be offline or RCON unavailable."
+            )
 
     async def status_command(self, ctx):
-        """Handle server status command."""
+        """Handle server status command using comprehensive RCON-based connectivity check."""
         try:
-            status = await self.kubernetes_manager.get_server_status()
+            status = await self.server_status_checker.get_server_status()
 
             if status == "running":
                 message = "🟢 ARK Server is running and ready for connections!"
+            elif status == "starting":
+                message = "🟡 ARK Server pods are running but game server is still starting up. Please wait a few more minutes..."
             elif status == "not_ready":
                 message = "🟡 ARK Server is starting up or not ready..."
             elif status == "error":
