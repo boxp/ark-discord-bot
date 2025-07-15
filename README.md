@@ -143,8 +143,6 @@ docker-compose up -d
 
 ### Kubernetesデプロイメント
 
-#### 一般的なKubernetesクラスター
-
 1. `k8s/secret.yaml`でシークレットをbase64エンコードした値で更新：
 ```bash
 echo -n "your_discord_bot_token" | base64
@@ -157,29 +155,6 @@ echo -n "your_rcon_password" | base64
 kubectl apply -k k8s/
 ```
 
-#### loliceクラスターへのデプロイ
-
-loliceクラスター上でARK Discord Botを実行する場合：
-
-1. Dockerイメージをビルドしてレジストリにプッシュ：
-```bash
-docker build -t ghcr.io/boxp/ark-discord-bot:v2.0 .
-docker push ghcr.io/boxp/ark-discord-bot:v2.0
-```
-
-2. lolice環境用の設定を更新：
-```bash
-# k8s/lolice/secret.yamlを編集してシークレットを設定
-kubectl apply -k k8s/lolice/
-```
-
-3. デプロイ状況の確認：
-```bash
-kubectl get pods -n ark-discord-bot
-kubectl logs -f deployment/ark-discord-bot -n ark-discord-bot
-```
-
-詳細な手順は `k8s/lolice/README.md` を参照してください。
 
 ## 開発
 
@@ -203,20 +178,12 @@ ark-discord-bot/
 │   ├── test_server_status_checker.py # サーバーステータス検証テスト
 │   └── test_server_monitor.py        # サーバー監視テスト
 ├── k8s/                          # Kubernetesマニフェスト
-│   ├── namespace.yaml            # 一般的なクラスター用
+│   ├── namespace.yaml
 │   ├── configmap.yaml
 │   ├── secret.yaml
 │   ├── rbac.yaml
 │   ├── deployment.yaml
-│   ├── kustomization.yaml
-│   └── lolice/                   # loliceクラスター専用
-│       ├── README.md             # デプロイ手順
-│       ├── namespace.yaml
-│       ├── configmap.yaml
-│       ├── secret.yaml
-│       ├── rbac.yaml
-│       ├── deployment.yaml
-│       └── kustomization.yaml
+│   └── kustomization.yaml
 ├── requirements.txt              # Python依存関係
 ├── uv.lock                      # uv再現可能インストール用ロックファイル
 ├── pyproject.toml               # プロジェクト設定
