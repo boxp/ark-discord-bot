@@ -148,19 +148,7 @@ jobs:
         # Create PR using GitHub CLI
         gh pr create \
           --title "update: ARK Discord Bot image to ${{ needs.build-and-push.outputs.image-tag }}" \
-          --body "## Summary
-
-Automated update of ARK Discord Bot container image.
-
-## Changes
-- Updated \`argoproj/ark-discord-bot/kustomization.yaml\` with new image tag
-- New image: \`${{ needs.build-and-push.outputs.image-uri }}\`
-- Source commit: ${{ github.sha }}
-
-## Deployment
-This PR will automatically deploy the updated Discord bot to the lolice cluster via ArgoCD once merged.
-
-🤖 Generated with [Claude Code](https://claude.ai/code)" \
+          --body "Automated update of ARK Discord Bot container image to ${{ needs.build-and-push.outputs.image-tag }}" \
           --head "${BRANCH_NAME}" \
           --base main
       env:
