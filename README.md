@@ -1,20 +1,22 @@
 # ARK Discord Bot
 
-A Discord bot for managing ARK: Survival Ascended server running in Kubernetes. This bot provides server management capabilities through Discord commands and automated server status notifications.
+A Discord bot for managing ARK: Survival Ascended server running in Kubernetes. This bot provides server management capabilities through Discord commands and automated server status notifications with RCON-based connectivity verification.
 
 ## Features
 
 🔄 **Server Management**
 - Restart ARK server using Kubernetes rollout restart
-- Check server status (running/not ready/error)
+- Comprehensive server status checking with RCON connectivity validation
+- Real-time server readiness detection
 
 👥 **Player Management** 
 - List current online players via RCON
 - Real-time player information
 
-🔔 **Notifications**
-- Automatic notifications when server becomes ready
-- Server status change alerts
+🔔 **Smart Notifications**
+- Automatic notifications when server becomes ready for connections
+- Differentiate between pod startup and actual game server readiness
+- Server status change alerts with detailed state information
 - Error notifications
 
 ❓ **Help System**
@@ -23,32 +25,44 @@ A Discord bot for managing ARK: Survival Ascended server running in Kubernetes. 
 ## Discord Commands
 
 - `!ark help` - Display help information
-- `!ark status` - Check current server status  
+- `!ark status` - Check comprehensive server status (K8s + RCON connectivity)
 - `!ark restart` - Restart the ARK server
 - `!ark players` - List current online players
+
+### Server Status States
+
+The `!ark status` command now provides detailed server state information:
+
+- 🟢 **Running**: Server is ready and accepting connections (RCON accessible)
+- 🟡 **Starting**: Kubernetes pods are running but game server is still initializing
+- 🟡 **Not Ready**: Kubernetes deployment is not ready
+- 🔴 **Error**: Server encountered an error
 
 ## Architecture
 
 This project follows Test-Driven Development (TDD) principles and uses:
 
-- **Kubernetes API** - For server restart and status monitoring
-- **RCON Protocol** - For player information and server commands
+- **Kubernetes API** - For server restart and pod status monitoring
+- **RCON Protocol** - For server connectivity validation and player information
 - **Discord.py** - For Discord bot functionality
 - **AsyncIO** - For concurrent operations
-- **Pytest** - For comprehensive testing
+- **uv** - For fast Python package management and virtual environments
+- **Pytest** - For comprehensive testing (37 test cases)
 
 ### Key Components
 
 - `KubernetesManager` - Handles Kubernetes operations
 - `RconManager` - Manages RCON communication with ARK server
-- `ServerMonitor` - Monitors server status changes
+- `ServerStatusChecker` - Comprehensive server status validation using K8s + RCON
+- `ServerMonitor` - Monitors server status changes with smart notifications
 - `ArkDiscordBot` - Main Discord bot implementation
 
 ## Setup Instructions
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.10+ (3.11+ recommended)
+- [uv](https://docs.astral.sh/uv/) - Python package manager
 - Kubernetes cluster with ARK server deployed
 - Discord bot token
 - RCON access to ARK server
@@ -74,19 +88,45 @@ RCON_PASSWORD=your_rcon_password_here
 
 ### Local Development
 
-1. Install dependencies:
+1. Install uv if not already installed:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Create virtual environment and install dependencies:
+```bash
+uv venv
+uv pip install -r requirements.txt
+```
+
+3. Run tests:
+```bash
+uv run pytest tests/ -v
+```
+
+4. Run the bot:
+```bash
+uv run python -m src.ark_discord_bot.main
+```
+
+### Alternative: Traditional Python Setup
+
+If you prefer using traditional Python tools:
+
+1. Create virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Run tests:
+3. Run tests:
 ```bash
 pytest tests/ -v
-```
-
-3. Run the bot:
-```bash
-python -m src.ark_discord_bot.main
 ```
 
 ### Docker Deployment
@@ -128,12 +168,14 @@ ark-discord-bot/
 │   ├── discord_bot.py            # Discord bot implementation
 │   ├── kubernetes_manager.py     # Kubernetes operations
 │   ├── rcon_manager.py          # RCON communication
+│   ├── server_status_checker.py # RCON-based server status validation
 │   └── server_monitor.py        # Server status monitoring
-├── tests/                        # Test files (TDD approach)
-│   ├── test_discord_bot.py
-│   ├── test_kubernetes_manager.py
-│   ├── test_rcon_manager.py
-│   └── test_server_monitor.py
+├── tests/                        # Test files (TDD approach - 37 tests)
+│   ├── test_discord_bot_simple.py     # Discord bot tests
+│   ├── test_kubernetes_manager.py     # Kubernetes operations tests
+│   ├── test_rcon_manager.py          # RCON communication tests
+│   ├── test_server_status_checker.py # Server status validation tests
+│   └── test_server_monitor.py        # Server monitoring tests
 ├── k8s/                          # Kubernetes manifests
 │   ├── namespace.yaml
 │   ├── configmap.yaml
@@ -142,6 +184,7 @@ ark-discord-bot/
 │   ├── deployment.yaml
 │   └── kustomization.yaml
 ├── requirements.txt              # Python dependencies
+├── uv.lock                      # uv lockfile for reproducible installs
 ├── pyproject.toml               # Project configuration
 ├── Dockerfile                   # Docker image
 ├── docker-compose.yml           # Docker Compose setup
@@ -151,20 +194,53 @@ ark-discord-bot/
 
 ### Testing
 
-The project uses pytest with comprehensive test coverage:
+The project uses pytest with comprehensive test coverage (37 test cases):
 
 ```bash
-# Run all tests
-pytest tests/ -v
+# Run all tests with uv
+uv run pytest tests/ -v
 
 # Run specific test file
-pytest tests/test_discord_bot.py -v
+uv run pytest tests/test_server_status_checker.py -v
 
 # Run with coverage
-pytest tests/ --cov=src/ark_discord_bot
+uv run pytest tests/ --cov=src/ark_discord_bot
+
+# Alternative: Traditional pytest (if virtual environment is activated)
+pytest tests/ -v
 ```
 
+#### Test Coverage
+
+- **Discord Bot Tests**: Command handling and response validation
+- **Kubernetes Manager Tests**: Deployment restart and status checking
+- **RCON Manager Tests**: Protocol communication and player listing
+- **Server Status Checker Tests**: RCON connectivity validation
+- **Server Monitor Tests**: Status change notifications and monitoring logic
+
 ### Development Commands
+
+#### Using uv (Recommended)
+
+```bash
+# Setup development environment
+uv venv && uv pip install -r requirements.txt
+
+# Run tests
+uv run pytest tests/ -v
+
+# Format code
+uv run black src/ tests/
+uv run isort src/ tests/
+
+# Lint code
+uv run pylint src/ark_discord_bot/
+
+# Run the bot
+uv run python -m src.ark_discord_bot.main
+```
+
+#### Using Makefile
 
 Use the Makefile for common development tasks:
 
@@ -210,11 +286,18 @@ The bot includes:
    - Verify RCON host and port
    - Check RCON password
    - Ensure ARK server has RCON enabled
+   - Test RCON connectivity manually
 
-4. **Server monitoring not working**
+4. **Server status showing "starting" for too long**
+   - Check if ARK server is actually ready (may take 5-10 minutes after pod start)
+   - Verify RCON connectivity to the server
+   - Check server initialization logs
+
+5. **Server monitoring not working**
    - Check Kubernetes API connectivity
    - Verify namespace and deployment names
    - Review monitoring interval settings
+   - Ensure ServerStatusChecker is working correctly
 
 ### Logs
 
@@ -230,12 +313,33 @@ kubectl logs -f deployment/ark-discord-bot -n ark-discord-bot
 tail -f ark_discord_bot.log
 ```
 
+## Recent Updates
+
+### v2.0 - RCON-Based Server Status Validation
+
+- **Enhanced Server Status Checking**: Now uses RCON connectivity to verify actual server readiness
+- **Smart State Detection**: Distinguishes between pod startup and game server initialization
+- **Improved Notifications**: More accurate server ready notifications
+- **Comprehensive Testing**: 37 test cases covering all scenarios
+- **uv Integration**: Fast dependency management and virtual environment handling
+
+### Server Status Flow
+
+1. **Kubernetes Check**: Verify pod is running
+2. **RCON Validation**: Test actual game server connectivity
+3. **State Determination**: 
+   - If both pass → "Running" 
+   - If K8s passes but RCON fails → "Starting"
+   - If K8s fails → "Not Ready"
+   - If errors occur → "Error"
+
 ## Contributing
 
 1. Follow TDD principles - write tests first
-2. Ensure all tests pass before submitting PR
-3. Use meaningful commit messages
-4. Update documentation as needed
+2. Use uv for dependency management: `uv run pytest tests/ -v`
+3. Ensure all 37 tests pass before submitting PR
+4. Use meaningful commit messages
+5. Update documentation as needed
 
 ## License
 
