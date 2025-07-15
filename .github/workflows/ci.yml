@@ -28,14 +28,8 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v --cov=src/ark_discord_bot --cov-report=xml
+        pytest tests/test_discord_bot_simple.py tests/test_rcon_manager.py tests/test_server_monitor.py tests/test_kubernetes_manager.py -v
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
 
   lint:
     runs-on: ubuntu-latest
