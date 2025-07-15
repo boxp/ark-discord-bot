@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
 
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException

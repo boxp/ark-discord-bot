@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import Optional
 
 from .kubernetes_manager import KubernetesManager
 from .rcon_manager import RconManager

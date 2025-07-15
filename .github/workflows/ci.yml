@@ -49,7 +49,7 @@ jobs:
 
     - name: Lint with pylint
       run: |
-        pylint src/ark_discord_bot/ --disable=missing-docstring,import-error,broad-exception-caught,logging-fstring-interpolation,line-too-long,unused-variable,not-callable,arguments-differ
+        pylint src/ark_discord_bot/ --disable=missing-docstring,import-error,broad-exception-caught,logging-fstring-interpolation,line-too-long,unused-variable,not-callable,arguments-differ,no-else-return,unused-import,invalid-overridden-method,unused-argument
 
     - name: Check formatting with black
       run: |

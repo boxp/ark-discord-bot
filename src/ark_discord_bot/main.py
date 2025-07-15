@@ -96,7 +96,7 @@ class ArkBotApplication:
 
         logger.info("ARK Discord Bot stopped.")
 
-    def _signal_handler(self, signum, frame):
+    def _signal_handler(self, signum, _frame):
         """Handle shutdown signals."""
         logger = logging.getLogger(__name__)
         logger.info(f"Received signal {signum}, shutting down...")
