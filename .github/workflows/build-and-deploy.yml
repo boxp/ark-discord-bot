@@ -141,16 +141,7 @@ jobs:
         git checkout -b "${BRANCH_NAME}"
         
         git add argoproj/ark-discord-bot/kustomization.yaml
-        git commit -m "update: ARK Discord Bot image to ${{ needs.build-and-push.outputs.image-tag }}
-
-Automated update of ARK Discord Bot container image.
-
-Image: ${{ needs.build-and-push.outputs.image-uri }}
-Commit: ${{ github.sha }}
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+        git commit -m "update: ARK Discord Bot image to ${{ needs.build-and-push.outputs.image-tag }}"
         
         git push origin "${BRANCH_NAME}"
         
