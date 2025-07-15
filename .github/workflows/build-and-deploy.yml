@@ -1,0 +1,176 @@
+name: Build and Deploy ARK Discord Bot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '.github/workflows/build-and-deploy.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '.github/workflows/build-and-deploy.yml'
+
+env:
+  ECR_REPOSITORY: ark-discord-bot
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: |
+        uv venv
+        uv pip install -r requirements.txt
+
+    - name: Run tests
+      run: |
+        uv run pytest tests/ -v --cov=src/ark_discord_bot --cov-report=xml
+
+    - name: Run linting
+      run: |
+        uv run pylint src/ark_discord_bot/
+        uv run black --check src/ tests/
+        uv run isort --check-only src/ tests/
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
+      contents: read
+    
+    outputs:
+      image-tag: ${{ steps.image-info.outputs.image-tag }}
+      image-uri: ${{ steps.image-info.outputs.image-uri }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ env.AWS_REGION }}
+        role-to-assume: 'arn:aws:iam::839695154978:role/ark-discord-bot-gha-role'
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Generate image tag
+      id: image-info
+      run: |
+        IMAGE_TAG="v$(date +%Y%m%d)-${GITHUB_SHA:0:7}"
+        IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}"
+        echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+        echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+        echo "Generated image tag: ${IMAGE_TAG}"
+        echo "Generated image URI: ${IMAGE_URI}"
+
+    - name: Build Docker image
+      run: |
+        docker build \
+          --tag ${{ steps.image-info.outputs.image-uri }} \
+          --tag ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest \
+          .
+
+    - name: Push image to Amazon ECR
+      run: |
+        docker push ${{ steps.image-info.outputs.image-uri }}
+        docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+  update-lolice-deployment:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout lolice repository
+      uses: actions/checkout@v4
+      with:
+        repository: boxp/lolice
+        token: ${{ secrets.GITHUB_TOKEN }}
+        path: lolice
+
+    - name: Update image tag in lolice
+      working-directory: lolice
+      run: |
+        NEW_TAG="${{ needs.build-and-push.outputs.image-tag }}"
+        echo "Updating image tag to: ${NEW_TAG}"
+        
+        # Update kustomization.yaml with new image tag
+        sed -i "s|newTag: .*|newTag: ${NEW_TAG}|" argoproj/ark-discord-bot/kustomization.yaml
+        
+        # Verify the change
+        echo "Updated kustomization.yaml:"
+        cat argoproj/ark-discord-bot/kustomization.yaml
+
+    - name: Create Pull Request
+      working-directory: lolice
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        BRANCH_NAME="update/ark-discord-bot-${{ needs.build-and-push.outputs.image-tag }}"
+        git checkout -b "${BRANCH_NAME}"
+        
+        git add argoproj/ark-discord-bot/kustomization.yaml
+        git commit -m "update: ARK Discord Bot image to ${{ needs.build-and-push.outputs.image-tag }}
+
+Automated update of ARK Discord Bot container image.
+
+Image: ${{ needs.build-and-push.outputs.image-uri }}
+Commit: ${{ github.sha }}
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+        
+        git push origin "${BRANCH_NAME}"
+        
+        # Create PR using GitHub CLI
+        gh pr create \
+          --title "update: ARK Discord Bot image to ${{ needs.build-and-push.outputs.image-tag }}" \
+          --body "## Summary
+
+Automated update of ARK Discord Bot container image.
+
+## Changes
+- Updated \`argoproj/ark-discord-bot/kustomization.yaml\` with new image tag
+- New image: \`${{ needs.build-and-push.outputs.image-uri }}\`
+- Source commit: ${{ github.sha }}
+
+## Deployment
+This PR will automatically deploy the updated Discord bot to the lolice cluster via ArgoCD once merged.
+
+🤖 Generated with [Claude Code](https://claude.ai/code)" \
+          --head "${BRANCH_NAME}" \
+          --base main
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
