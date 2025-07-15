@@ -27,7 +27,9 @@ class TestArkDiscordBot:
     @pytest.fixture
     def discord_bot(self, mock_config):
         """Create an ArkDiscordBot instance for testing."""
-        return ArkDiscordBot(mock_config)
+        with patch('src.ark_discord_bot.discord_bot.KubernetesManager'), \
+             patch('src.ark_discord_bot.discord_bot.RconManager'):
+            return ArkDiscordBot(mock_config)
 
     @pytest.mark.asyncio
     async def test_help_command(self, discord_bot):

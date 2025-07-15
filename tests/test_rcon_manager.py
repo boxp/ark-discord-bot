@@ -22,24 +22,9 @@ class TestRconManager:
     @pytest.mark.asyncio
     async def test_get_online_players_success(self, rcon_manager):
         """Test successful retrieval of online players."""
-        mock_response = "Player1, Player2, Player3"
-
-        with patch('src.ark_discord_bot.rcon_manager.asyncio.open_connection') as mock_open_connection:
-            mock_reader = Mock()
-            mock_writer = Mock()
-            mock_open_connection.return_value = (mock_reader, mock_writer)
-
-            # Mock authentication
-            mock_reader.read.side_effect = [
-                b'\x0a\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00',  # Auth response
-                b'\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00Player1, Player2, Player3\x00\x00'  # Command response
-            ]
-
+        with patch.object(rcon_manager, 'send_command', return_value="Player1, 123456\nPlayer2, 789012\nPlayer3, 345678"):
             players = await rcon_manager.get_online_players()
-
             assert players == ["Player1", "Player2", "Player3"]
-            mock_writer.write.assert_called()
-            mock_writer.close.assert_called()
 
     @pytest.mark.asyncio
     async def test_get_online_players_no_players(self, rcon_manager):
@@ -91,7 +76,7 @@ class TestRconManager:
         """Test successful command execution."""
         with patch('src.ark_discord_bot.rcon_manager.asyncio.open_connection') as mock_open_connection:
             mock_reader = Mock()
-            mock_writer = Mock()
+            mock_writer = AsyncMock()
             mock_open_connection.return_value = (mock_reader, mock_writer)
 
             # Mock authentication and command response
