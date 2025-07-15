@@ -86,16 +86,18 @@ class ServerMonitor:
             message = None
 
             if current_status == "running" and previous_status != "running":
-                message = "🟢 ARK Server is now ready for connections! 🦕"
+                message = "🟢 ARKサーバーが接続準備完了しました！ 🦕"
             elif current_status == "starting" and previous_status == "not_ready":
-                message = "🟡 ARK Server pods are running, game server starting up..."
+                message = "🟡 ARKサーバーポッドが稼働中、ゲームサーバー起動中..."
             elif (
                 current_status in ["not_ready", "starting"]
                 and previous_status == "running"
             ):
-                message = "🟡 ARK Server is restarting or not ready..."
+                message = "🟡 ARKサーバーが再起動中または準備未完了です..."
             elif current_status == "error":
-                message = "🔴 ARK Server encountered an error! Please check the logs."
+                message = (
+                    "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
+                )
 
             if message:
                 await self.discord_bot.send_message(self.channel_id, message)

@@ -73,19 +73,19 @@ class ArkDiscordBot(commands.Bot):
     async def help_command(self, ctx):
         """Display help information."""
         help_text = """
-**🦕 ARK Server Management Commands**
+**🦕 ARKサーバー管理コマンド**
 
-`!ark help` - Show this help message
-`!ark status` - Check current server status
-`!ark restart` - Restart the ARK server
-`!ark players` - List current online players
+`!ark help` - このヘルプメッセージを表示
+`!ark status` - 現在のサーバーステータスを確認
+`!ark restart` - ARKサーバーを再起動
+`!ark players` - 現在オンラインのプレイヤー一覧を表示
 
-**📋 Usage Examples:**
-• `!ark status` - Check if server is running
-• `!ark players` - See who's online
-• `!ark restart` - Restart server (use with caution!)
+**📋 使用例:**
+• `!ark status` - サーバーが稼働中か確認
+• `!ark players` - オンラインプレイヤーを確認
+• `!ark restart` - サーバーを再起動（注意して使用）
 
-**ℹ️ Note:** Server restart may take several minutes to complete.
+**ℹ️ 注意:** サーバー再起動は完了まで数分かかる場合があります。
         """
         await ctx.send(help_text)
 
@@ -98,16 +98,16 @@ class ArkDiscordBot(commands.Bot):
 
             if success:
                 await ctx.send(
-                    "🔄 ARK Server restart initiated! Please wait for the server to come back online."
+                    "🔄 ARKサーバーの再起動を開始しました！サーバーがオンラインに戻るまでしばらくお待ちください。"
                 )
             else:
                 await ctx.send(
-                    "❌ Failed to restart ARK Server. Please check the logs or contact an administrator."
+                    "❌ ARKサーバーの再起動に失敗しました。ログを確認するか管理者にお問い合わせください。"
                 )
 
         except Exception as e:
             logger.error(f"Error in restart command: {e}")
-            await ctx.send("❌ An error occurred while restarting the server.")
+            await ctx.send("❌ サーバー再起動中にエラーが発生しました。")
 
     async def players_command(self, ctx):
         """Handle players list command."""
@@ -116,16 +116,16 @@ class ArkDiscordBot(commands.Bot):
 
             if players:
                 player_list = "\n".join([f"• {player}" for player in players])
-                message = f"👥 **{len(players)} players online:**\n{player_list}"
+                message = f"👥 **現在{len(players)}人のプレイヤーがオンライン:**\n{player_list}"
             else:
-                message = "🏝️ No players are currently online."
+                message = "🏝️ 現在オンラインのプレイヤーはいません。"
 
             await ctx.send(message)
 
         except Exception as e:
             logger.error(f"Error in players command: {e}")
             await ctx.send(
-                "❌ Failed to get player information. Server might be offline or RCON unavailable."
+                "❌ プレイヤー情報の取得に失敗しました。サーバーがオフラインかRCONが利用できない可能性があります。"
             )
 
     async def status_command(self, ctx):
@@ -134,21 +134,23 @@ class ArkDiscordBot(commands.Bot):
             status = await self.server_status_checker.get_server_status()
 
             if status == "running":
-                message = "🟢 ARK Server is running and ready for connections!"
+                message = "🟢 ARKサーバーは稼働中で接続準備完了です！"
             elif status == "starting":
-                message = "🟡 ARK Server pods are running but game server is still starting up. Please wait a few more minutes..."
+                message = "🟡 ARKサーバーポッドは稼働中ですが、ゲームサーバーはまだ起動中です。もう少しお待ちください..."
             elif status == "not_ready":
-                message = "🟡 ARK Server is starting up or not ready..."
+                message = "🟡 ARKサーバーは起動中または準備未完了です..."
             elif status == "error":
-                message = "🔴 ARK Server encountered an error! Please check the logs."
+                message = (
+                    "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
+                )
             else:
-                message = f"❓ Unknown server status: {status}"
+                message = f"❓ 不明なサーバーステータス: {status}"
 
             await ctx.send(message)
 
         except Exception as e:
             logger.error(f"Error in status command: {e}")
-            await ctx.send("❌ Failed to get server status.")
+            await ctx.send("❌ サーバーステータスの取得に失敗しました。")
 
     async def send_message(self, channel_id: int, message: str):
         """Send message to specific channel.
@@ -178,4 +180,4 @@ class ArkDiscordBot(commands.Bot):
             return
 
         logger.error(f"Command error: {error}")
-        await ctx.send("❌ An error occurred while processing the command.")
+        await ctx.send("❌ コマンド処理中にエラーが発生しました。")

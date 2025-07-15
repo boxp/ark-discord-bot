@@ -42,7 +42,7 @@ class TestArkDiscordBotSimple:
             # Verify help message was sent
             mock_ctx.send.assert_called_once()
             help_text = mock_ctx.send.call_args[0][0]
-            assert "ARK Server Management Commands" in help_text
+            assert "ARKサーバー管理コマンド" in help_text
             assert "!ark restart" in help_text
             assert "!ark players" in help_text
             assert "!ark status" in help_text
@@ -72,7 +72,7 @@ class TestArkDiscordBotSimple:
             # Verify restart was called and success message sent
             bot.kubernetes_manager.restart_server.assert_called_once()
             mock_ctx.send.assert_called_with(
-                "🔄 ARK Server restart initiated! Please wait for the server to come back online."
+                "🔄 ARKサーバーの再起動を開始しました！サーバーがオンラインに戻るまでしばらくお待ちください。"
             )
 
     @pytest.mark.asyncio
@@ -99,7 +99,7 @@ class TestArkDiscordBotSimple:
             bot.rcon_manager.get_online_players.assert_called_once()
             mock_ctx.send.assert_called_once()
             message = mock_ctx.send.call_args[0][0]
-            assert "3 players online" in message
+            assert "現在3人のプレイヤーがオンライン" in message
             assert "Player1" in message
 
     @pytest.mark.asyncio
@@ -126,7 +126,7 @@ class TestArkDiscordBotSimple:
 
             # Verify status message
             mock_ctx.send.assert_called_with(
-                "🟢 ARK Server is running and ready for connections!"
+                "🟢 ARKサーバーは稼働中で接続準備完了です！"
             )
 
     @pytest.mark.asyncio
@@ -153,7 +153,7 @@ class TestArkDiscordBotSimple:
 
             # Verify status message
             mock_ctx.send.assert_called_with(
-                "🟡 ARK Server pods are running but game server is still starting up. Please wait a few more minutes..."
+                "🟡 ARKサーバーポッドは稼働中ですが、ゲームサーバーはまだ起動中です。もう少しお待ちください..."
             )
 
     @pytest.mark.asyncio

@@ -67,7 +67,7 @@ class TestServerMonitor:
 
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id, "🟢 ARK Server is now ready for connections! 🦕"
+            server_monitor.channel_id, "🟢 ARKサーバーが接続準備完了しました！ 🦕"
         )
         assert server_monitor.last_status == "running"
 
@@ -89,7 +89,7 @@ class TestServerMonitor:
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
             server_monitor.channel_id,
-            "🟡 ARK Server pods are running, game server starting up...",
+            "🟡 ARKサーバーポッドが稼働中、ゲームサーバー起動中...",
         )
         assert server_monitor.last_status == "starting"
 
@@ -108,7 +108,7 @@ class TestServerMonitor:
 
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id, "🟡 ARK Server is restarting or not ready..."
+            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
         )
         assert server_monitor.last_status == "not_ready"
 
@@ -125,7 +125,7 @@ class TestServerMonitor:
         # Verify error notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
             server_monitor.channel_id,
-            "🔴 ARK Server encountered an error! Please check the logs.",
+            "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。",
         )
         assert server_monitor.last_status == "error"
 
