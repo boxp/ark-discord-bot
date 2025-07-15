@@ -12,7 +12,7 @@ class ServerMonitor:
 
     def __init__(self, kubernetes_manager, discord_bot, channel_id: int, check_interval: int = 30):
         """Initialize ServerMonitor.
-        
+
         Args:
             kubernetes_manager: KubernetesManager instance
             discord_bot: Discord bot instance
@@ -30,7 +30,7 @@ class ServerMonitor:
         """Start monitoring server status."""
         self.is_monitoring = True
         logger.info("Starting server status monitoring")
-        
+
         while self.is_monitoring:
             try:
                 await self._check_server_status()
@@ -40,7 +40,7 @@ class ServerMonitor:
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
                 await asyncio.sleep(self.check_interval)
-        
+
         logger.info("Server status monitoring stopped")
 
     def stop_monitoring(self):
@@ -49,7 +49,7 @@ class ServerMonitor:
 
     async def get_current_status(self) -> str:
         """Get current server status.
-        
+
         Returns:
             str: Current server status
         """
@@ -59,34 +59,34 @@ class ServerMonitor:
         """Check server status and send notifications if changed."""
         try:
             current_status = await self.kubernetes_manager.get_server_status()
-            
+
             if self.last_status != current_status:
                 await self._send_status_notification(current_status, self.last_status)
                 self.last_status = current_status
-                
+
         except Exception as e:
             logger.error(f"Error checking server status: {e}")
 
     async def _send_status_notification(self, current_status: str, previous_status: Optional[str]):
         """Send notification about status change.
-        
+
         Args:
             current_status: Current server status
             previous_status: Previous server status
         """
         try:
             message = None
-            
+
             if current_status == "running" and previous_status != "running":
                 message = "🟢 ARK Server is now ready for connections! 🦕"
             elif current_status == "not_ready" and previous_status == "running":
                 message = "🟡 ARK Server is restarting or not ready..."
             elif current_status == "error":
                 message = "🔴 ARK Server encountered an error! Please check the logs."
-            
+
             if message:
                 await self.discord_bot.send_message(self.channel_id, message)
                 logger.info(f"Sent status notification: {message}")
-                
+
         except Exception as e:
             logger.error(f"Error sending status notification: {e}")

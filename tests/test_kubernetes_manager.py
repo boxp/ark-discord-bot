@@ -25,12 +25,12 @@ class TestKubernetesManager:
         with patch('src.ark_discord_bot.kubernetes_manager.client.AppsV1Api') as mock_apps_v1:
             mock_api = Mock()
             mock_apps_v1.return_value = mock_api
-            
+
             # Mock successful patch response
             mock_api.patch_namespaced_deployment.return_value = Mock()
-            
+
             result = await k8s_manager.restart_server()
-            
+
             assert result is True
             mock_api.patch_namespaced_deployment.assert_called_once_with(
                 name="ark-server",
@@ -41,7 +41,7 @@ class TestKubernetesManager:
                             "metadata": {
                                 "annotations": {
                                     "kubectl.kubernetes.io/restartedAt": pytest.approx(
-                                        mock_api.patch_namespaced_deployment.call_args[1]["body"]["spec"]["template"]["metadata"]["annotations"]["kubectl.kubernetes.io/restartedAt"], 
+                                        mock_api.patch_namespaced_deployment.call_args[1]["body"]["spec"]["template"]["metadata"]["annotations"]["kubectl.kubernetes.io/restartedAt"],
                                         abs=1
                                     )
                                 }
@@ -57,14 +57,14 @@ class TestKubernetesManager:
         with patch('src.ark_discord_bot.kubernetes_manager.client.AppsV1Api') as mock_apps_v1:
             mock_api = Mock()
             mock_apps_v1.return_value = mock_api
-            
+
             # Mock API exception
             mock_api.patch_namespaced_deployment.side_effect = ApiException(
                 status=404, reason="Not Found"
             )
-            
+
             result = await k8s_manager.restart_server()
-            
+
             assert result is False
 
     @pytest.mark.asyncio
@@ -73,15 +73,15 @@ class TestKubernetesManager:
         with patch('src.ark_discord_bot.kubernetes_manager.client.AppsV1Api') as mock_apps_v1:
             mock_api = Mock()
             mock_apps_v1.return_value = mock_api
-            
+
             # Mock deployment response
             mock_deployment = Mock()
             mock_deployment.status.ready_replicas = 1
             mock_deployment.status.replicas = 1
             mock_api.read_namespaced_deployment.return_value = mock_deployment
-            
+
             status = await k8s_manager.get_server_status()
-            
+
             assert status == "running"
 
     @pytest.mark.asyncio
@@ -90,15 +90,15 @@ class TestKubernetesManager:
         with patch('src.ark_discord_bot.kubernetes_manager.client.AppsV1Api') as mock_apps_v1:
             mock_api = Mock()
             mock_apps_v1.return_value = mock_api
-            
+
             # Mock deployment response
             mock_deployment = Mock()
             mock_deployment.status.ready_replicas = 0
             mock_deployment.status.replicas = 1
             mock_api.read_namespaced_deployment.return_value = mock_deployment
-            
+
             status = await k8s_manager.get_server_status()
-            
+
             assert status == "not_ready"
 
     @pytest.mark.asyncio
@@ -107,12 +107,12 @@ class TestKubernetesManager:
         with patch('src.ark_discord_bot.kubernetes_manager.client.AppsV1Api') as mock_apps_v1:
             mock_api = Mock()
             mock_apps_v1.return_value = mock_api
-            
+
             # Mock API exception
             mock_api.read_namespaced_deployment.side_effect = ApiException(
                 status=404, reason="Not Found"
             )
-            
+
             status = await k8s_manager.get_server_status()
-            
+
             assert status == "error"

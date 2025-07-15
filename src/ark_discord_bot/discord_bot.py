@@ -17,31 +17,31 @@ class ArkDiscordBot(commands.Bot):
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize ArkDiscordBot.
-        
+
         Args:
             config: Configuration dictionary
         """
         intents = discord.Intents.default()
         intents.message_content = True
-        
+
         super().__init__(command_prefix='!ark ', intents=intents, help_command=None)
-        
+
         self.config = config
         self.channel_id = config['channel_id']
-        
+
         # Initialize managers
         self.kubernetes_manager = KubernetesManager(
             namespace=config['kubernetes_namespace'],
             deployment_name=config['kubernetes_deployment_name'],
             service_name=config['kubernetes_service_name']
         )
-        
+
         self.rcon_manager = RconManager(
             host=config['rcon_host'],
             port=config['rcon_port'],
             password=config['rcon_password']
         )
-        
+
         # Add commands
         self.add_commands()
 
@@ -50,15 +50,15 @@ class ArkDiscordBot(commands.Bot):
         @self.command(name='help')
         async def help_cmd(ctx):
             await self.help_command(ctx)
-        
+
         @self.command(name='restart')
         async def restart_cmd(ctx):
             await self.restart_command(ctx)
-        
+
         @self.command(name='players')
         async def players_cmd(ctx):
             await self.players_command(ctx)
-        
+
         @self.command(name='status')
         async def status_cmd(ctx):
             await self.status_command(ctx)
@@ -86,14 +86,14 @@ class ArkDiscordBot(commands.Bot):
         """Handle server restart command."""
         try:
             logger.info(f"Server restart requested by {ctx.author}")
-            
+
             success = await self.kubernetes_manager.restart_server()
-            
+
             if success:
                 await ctx.send("🔄 ARK Server restart initiated! Please wait for the server to come back online.")
             else:
                 await ctx.send("❌ Failed to restart ARK Server. Please check the logs or contact an administrator.")
-                
+
         except Exception as e:
             logger.error(f"Error in restart command: {e}")
             await ctx.send("❌ An error occurred while restarting the server.")
@@ -102,15 +102,15 @@ class ArkDiscordBot(commands.Bot):
         """Handle players list command."""
         try:
             players = await self.rcon_manager.get_online_players()
-            
+
             if players:
                 player_list = "\n".join([f"• {player}" for player in players])
                 message = f"👥 **{len(players)} players online:**\n{player_list}"
             else:
                 message = "🏝️ No players are currently online."
-                
+
             await ctx.send(message)
-            
+
         except Exception as e:
             logger.error(f"Error in players command: {e}")
             await ctx.send("❌ Failed to get player information. Server might be offline or RCON unavailable.")
@@ -119,7 +119,7 @@ class ArkDiscordBot(commands.Bot):
         """Handle server status command."""
         try:
             status = await self.kubernetes_manager.get_server_status()
-            
+
             if status == "running":
                 message = "🟢 ARK Server is running and ready for connections!"
             elif status == "not_ready":
@@ -128,16 +128,16 @@ class ArkDiscordBot(commands.Bot):
                 message = "🔴 ARK Server encountered an error! Please check the logs."
             else:
                 message = f"❓ Unknown server status: {status}"
-                
+
             await ctx.send(message)
-            
+
         except Exception as e:
             logger.error(f"Error in status command: {e}")
             await ctx.send("❌ Failed to get server status.")
 
     async def send_message(self, channel_id: int, message: str):
         """Send message to specific channel.
-        
+
         Args:
             channel_id: Discord channel ID
             message: Message to send
@@ -148,7 +148,7 @@ class ArkDiscordBot(commands.Bot):
                 await channel.send(message)
             else:
                 logger.error(f"Channel {channel_id} not found")
-                
+
         except Exception as e:
             logger.error(f"Error sending message to channel {channel_id}: {e}")
 
@@ -161,6 +161,6 @@ class ArkDiscordBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound):
             # Ignore unknown commands
             return
-        
+
         logger.error(f"Command error: {error}")
         await ctx.send("❌ An error occurred while processing the command.")

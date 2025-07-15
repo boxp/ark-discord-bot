@@ -10,7 +10,7 @@ load_dotenv()
 
 def get_config() -> Dict[str, Any]:
     """Get configuration from environment variables.
-    
+
     Returns:
         Dict[str, Any]: Configuration dictionary
     """
@@ -26,11 +26,11 @@ def get_config() -> Dict[str, Any]:
         'monitoring_interval': int(os.getenv('MONITORING_INTERVAL', '30')),
         'log_level': os.getenv('LOG_LEVEL', 'INFO'),
     }
-    
+
     # Validate required configuration
     required_keys = ['discord_token', 'channel_id', 'rcon_password']
     for key in required_keys:
         if not config.get(key):
             raise ValueError(f"Missing required configuration: {key}")
-    
+
     return config
