@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ark-discord-bot
+  namespace: ark-discord-bot
+  labels:
+    app.kubernetes.io/name: ark-discord-bot
+    app.kubernetes.io/instance: production
+    app.kubernetes.io/component: discord-bot
+    app.kubernetes.io/version: "2.0"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ark-discord-bot
+      app.kubernetes.io/instance: production
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ark-discord-bot
+        app.kubernetes.io/instance: production
+        app.kubernetes.io/component: discord-bot
+      annotations:
+        # Force pod restart on config changes
+        kubectl.kubernetes.io/restartedAt: ""
+    spec:
+      serviceAccountName: ark-discord-bot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10000
+        runAsGroup: 10000
+        fsGroup: 10000
+      containers:
+      - name: ark-discord-bot
+        # Use GitHub Container Registry or Docker Hub for production
+        # Build and push image first: docker build -t ghcr.io/boxp/ark-discord-bot:v2.0 .
+        image: ghcr.io/boxp/ark-discord-bot:v2.0
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: ark-discord-bot-config
+        - secretRef:
+            name: ark-discord-bot-secret
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - |
+              import asyncio
+              import sys
+              try:
+                  import discord
+                  print('Discord bot dependencies available')
+                  sys.exit(0)
+              except ImportError as e:
+                  print(f'Import error: {e}')
+                  sys.exit(1)
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - |
+              import os
+              import sys
+              required_vars = ['DISCORD_BOT_TOKEN', 'DISCORD_CHANNEL_ID', 'RCON_PASSWORD']
+              missing = [var for var in required_vars if not os.getenv(var)]
+              if missing:
+                  print(f'Missing required environment variables: {missing}')
+                  sys.exit(1)
+              print('Configuration check passed')
+              sys.exit(0)
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10000
+          runAsGroup: 10000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: "100Mi"
+      - name: logs
+        emptyDir:
+          sizeLimit: "1Gi"
+      restartPolicy: Always
+      # Add node affinity if needed for specific nodes
+      # affinity:
+      #   nodeAffinity:
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #     - weight: 100
+      #       preference:
+      #         matchExpressions:
+      #         - key: node-role.kubernetes.io/worker
+      #           operator: In
+      #           values:
+      #           - "true"

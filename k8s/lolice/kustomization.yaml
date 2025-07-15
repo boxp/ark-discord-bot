@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ark-discord-bot-lolice
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  environment: production
+  cluster: lolice
+
+# Namespace for all resources
+namespace: ark-discord-bot
+
+# Resources to deploy
+resources:
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- rbac.yaml
+- deployment.yaml
+
+# Images to use (update with actual registry)
+images:
+- name: ghcr.io/boxp/ark-discord-bot
+  newTag: v2.0
+
+# Patches for production environment
+patches:
+- target:
+    kind: Deployment
+    name: ark-discord-bot
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/memory
+      value: "256Mi"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/requests/cpu
+      value: "200m"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/memory
+      value: "1Gi"
+    - op: replace
+      path: /spec/template/spec/containers/0/resources/limits/cpu
+      value: "1000m"
+
+# ConfigMap generator for additional configuration
+configMapGenerator:
+- name: ark-discord-bot-extra-config
+  literals:
+  - DEPLOYMENT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  - VERSION=v2.0
+  - CLUSTER=lolice
