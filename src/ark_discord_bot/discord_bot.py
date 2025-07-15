@@ -56,7 +56,7 @@ class ArkDiscordBot(commands.Bot):
 
         @self.command(name="help")
         async def help_cmd(ctx):
-            await self.help_command(ctx)
+            await self.help_command_method(ctx)
 
         @self.command(name="restart")
         async def restart_cmd(ctx):
@@ -70,7 +70,7 @@ class ArkDiscordBot(commands.Bot):
         async def status_cmd(ctx):
             await self.status_command(ctx)
 
-    async def help_command(self, ctx):
+    async def help_command_method(self, ctx):
         """Display help information."""
         help_text = """
 **🦕 ARKサーバー管理コマンド**

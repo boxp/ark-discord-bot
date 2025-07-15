@@ -37,7 +37,7 @@ class TestArkDiscordBotSimple:
             mock_ctx = Mock()
             mock_ctx.send = AsyncMock()
 
-            await bot.help_command(mock_ctx)
+            await bot.help_command_method(mock_ctx)
 
             # Verify help message was sent
             mock_ctx.send.assert_called_once()
