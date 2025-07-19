@@ -63,7 +63,9 @@ class RconManager:
                 decoded = data.decode(encoding)
                 # Validate the decoded string doesn't contain replacement chars
                 if "�" not in decoded or encoding == "latin1":  # latin1 never fails
-                    logger.debug("Successfully decoded RCON response using %s", encoding)
+                    logger.debug(
+                        "Successfully decoded RCON response using %s", encoding
+                    )
                     return decoded
             except (UnicodeDecodeError, UnicodeError):
                 continue
