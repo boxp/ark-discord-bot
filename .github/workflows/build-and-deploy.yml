@@ -68,5 +68,4 @@ jobs:
     - name: Push image to Amazon ECR
       run: |
         docker push ${{ steps.image-info.outputs.image-uri }}
-        docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
