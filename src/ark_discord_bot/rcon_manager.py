@@ -36,41 +36,45 @@ class RconManager:
 
     def _decode_response(self, data: bytes) -> str:
         """Decode RCON response with proper character encoding detection.
-        
+
         Args:
             data: Raw bytes from RCON response
-            
+
         Returns:
             str: Properly decoded string
         """
         if not data:
             return ""
-            
+
         # Try charset-normalizer for automatic encoding detection if available
         if from_bytes:
             try:
                 result = from_bytes(data)
                 if result and result.best():
                     return str(result.best())
-            except Exception as e:
-                logger.debug(f"Charset detection failed: {e}")
-        
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.debug("Charset detection failed: %s", e)
+
         # Fallback to manual encoding attempts
-        encodings = ['utf-8', 'windows-1252', 'latin1', 'cp932', 'shift_jis']
-        
+        encodings = ["utf-8", "windows-1252", "latin1", "cp932", "shift_jis"]
+
         for encoding in encodings:
             try:
                 decoded = data.decode(encoding)
                 # Validate the decoded string doesn't contain replacement chars
-                if '�' not in decoded or encoding == 'latin1':  # latin1 never fails
-                    logger.debug(f"Successfully decoded RCON response using {encoding}")
+                if "�" not in decoded or encoding == "latin1":  # latin1 never fails
+                    logger.debug(
+                        "Successfully decoded RCON response using %s", encoding
+                    )
                     return decoded
             except (UnicodeDecodeError, UnicodeError):
                 continue
-                
+
         # Last resort: decode with utf-8 and replace errors
-        logger.warning("All encoding attempts failed, using UTF-8 with error replacement")
-        return data.decode('utf-8', errors='replace')
+        logger.warning(
+            "All encoding attempts failed, using UTF-8 with error replacement"
+        )
+        return data.decode("utf-8", errors="replace")
 
     async def get_online_players(self) -> List[str]:
         """Get list of online players.
@@ -93,8 +97,8 @@ class RconManager:
                             players.append(parts[0])
                 return players
             return []
-        except Exception as e:
-            logger.error(f"Error getting online players: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error getting online players: %s", e)
             return []
 
     async def send_command(self, command: str) -> Optional[str]:
@@ -130,8 +134,8 @@ class RconManager:
 
             return None
 
-        except Exception as e:
-            logger.error(f"Error sending RCON command: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error sending RCON command: %s", e)
             return None
 
     async def _authenticate(
@@ -158,8 +162,8 @@ class RconManager:
 
             return False
 
-        except Exception as e:
-            logger.error(f"RCON authentication failed: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("RCON authentication failed: %s", e)
             return False
 
     async def _send_packet(
@@ -211,12 +215,12 @@ class RconManager:
                 return None
 
             # Parse packet
-            packet_id = struct.unpack("<I", packet_data[0:4])[0]
+            _ = struct.unpack("<I", packet_data[0:4])[0]  # packet_id (unused)
             packet_type = struct.unpack("<I", packet_data[4:8])[0]
             data = packet_data[8:-2]  # Remove null terminators
 
             return (packet_type, data)
 
-        except Exception as e:
-            logger.error(f"Error reading RCON packet: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error reading RCON packet: %s", e)
             return None
