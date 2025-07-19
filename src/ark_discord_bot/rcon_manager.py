@@ -5,6 +5,11 @@ import logging
 import struct
 from typing import List, Optional
 
+try:
+    from charset_normalizer import from_bytes
+except ImportError:
+    from_bytes = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +33,44 @@ class RconManager:
         self.host = host
         self.port = port
         self.password = password
+
+    def _decode_response(self, data: bytes) -> str:
+        """Decode RCON response with proper character encoding detection.
+        
+        Args:
+            data: Raw bytes from RCON response
+            
+        Returns:
+            str: Properly decoded string
+        """
+        if not data:
+            return ""
+            
+        # Try charset-normalizer for automatic encoding detection if available
+        if from_bytes:
+            try:
+                result = from_bytes(data)
+                if result and result.best():
+                    return str(result.best())
+            except Exception as e:
+                logger.debug(f"Charset detection failed: {e}")
+        
+        # Fallback to manual encoding attempts
+        encodings = ['utf-8', 'windows-1252', 'latin1', 'cp932', 'shift_jis']
+        
+        for encoding in encodings:
+            try:
+                decoded = data.decode(encoding)
+                # Validate the decoded string doesn't contain replacement chars
+                if '�' not in decoded or encoding == 'latin1':  # latin1 never fails
+                    logger.debug(f"Successfully decoded RCON response using {encoding}")
+                    return decoded
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+                
+        # Last resort: decode with utf-8 and replace errors
+        logger.warning("All encoding attempts failed, using UTF-8 with error replacement")
+        return data.decode('utf-8', errors='replace')
 
     async def get_online_players(self) -> List[str]:
         """Get list of online players.
@@ -83,7 +126,7 @@ class RconManager:
             await writer.wait_closed()
 
             if response and response[0] == self.SERVERDATA_RESPONSE_VALUE:
-                return response[1].decode("utf-8", errors="ignore").strip()
+                return self._decode_response(response[1]).strip()
 
             return None
 
