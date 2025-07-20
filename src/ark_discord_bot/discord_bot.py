@@ -23,7 +23,9 @@ class RestartConfirmationView(discord.ui.View):
 
     @discord.ui.button(label="再起動する", style=discord.ButtonStyle.danger, emoji="🔄")
     async def confirm_restart(
-        self, interaction: discord.Interaction, button: discord.ui.Button  # pylint: disable=unused-argument
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # pylint: disable=unused-argument
     ):
         """Handle restart confirmation."""
         self.confirmed = True
@@ -57,7 +59,9 @@ class RestartConfirmationView(discord.ui.View):
         label="キャンセル", style=discord.ButtonStyle.secondary, emoji="❌"
     )
     async def cancel_restart(
-        self, interaction: discord.Interaction, button: discord.ui.Button  # pylint: disable=unused-argument
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # pylint: disable=unused-argument
     ):
         """Handle restart cancellation."""
         # Disable all buttons
