@@ -50,7 +50,7 @@ class TestArkDiscordBotSimple:
 
     @pytest.mark.asyncio
     async def test_restart_command_success(self, mock_config):
-        """Test successful restart command."""
+        """Test restart command shows confirmation dialog."""
         with patch(
             "src.ark_discord_bot.discord_bot.KubernetesManager"
         ) as mock_k8s, patch("src.ark_discord_bot.discord_bot.RconManager"), patch(
@@ -69,11 +69,12 @@ class TestArkDiscordBotSimple:
 
             await bot.restart_command(mock_ctx)
 
-            # Verify restart was called and success message sent
-            bot.kubernetes_manager.restart_server.assert_called_once()
-            mock_ctx.send.assert_called_with(
-                "🔄 ARKサーバーの再起動を開始しました！サーバーがオンラインに戻るまでしばらくお待ちください。"
-            )
+            # Verify confirmation dialog was sent (not direct restart)
+            mock_ctx.send.assert_called_once()
+            args, kwargs = mock_ctx.send.call_args
+            assert "embed" in kwargs
+            assert "view" in kwargs
+            assert "ARKサーバー再起動の確認" in kwargs["embed"].title
 
     @pytest.mark.asyncio
     async def test_players_command_with_players(self, mock_config):
