@@ -16,28 +16,29 @@ logger = logging.getLogger(__name__)
 class RestartConfirmationView(discord.ui.View):
     """View for restart confirmation dialog."""
 
-    def __init__(self, bot: 'ArkDiscordBot', timeout=60):
+    def __init__(self, bot: "ArkDiscordBot", timeout=60):
         super().__init__(timeout=timeout)
         self.bot = bot
         self.confirmed = False
 
-    @discord.ui.button(label='再起動する', style=discord.ButtonStyle.danger, emoji='🔄')
-    async def confirm_restart(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="再起動する", style=discord.ButtonStyle.danger, emoji="🔄")
+    async def confirm_restart(
+        self, interaction: discord.Interaction, button: discord.ui.Button  # pylint: disable=unused-argument
+    ):
         """Handle restart confirmation."""
         self.confirmed = True
-        
+
         # Disable all buttons
         for item in self.children:
             item.disabled = True
-        
+
         await interaction.response.edit_message(
-            content="🔄 ARKサーバーの再起動を開始しています...",
-            view=self
+            content="🔄 ARKサーバーの再起動を開始しています...", view=self
         )
-        
+
         try:
             success = await self.bot.kubernetes_manager.restart_server()
-            
+
             if success:
                 await interaction.followup.send(
                     "✅ ARKサーバーの再起動を開始しました！サーバーがオンラインに戻るまでしばらくお待ちください。"
@@ -48,18 +49,23 @@ class RestartConfirmationView(discord.ui.View):
                 )
         except Exception as e:
             logger.error(f"Error during server restart: {e}")
-            await interaction.followup.send("❌ サーバー再起動中にエラーが発生しました。")
+            await interaction.followup.send(
+                "❌ サーバー再起動中にエラーが発生しました。"
+            )
 
-    @discord.ui.button(label='キャンセル', style=discord.ButtonStyle.secondary, emoji='❌')
-    async def cancel_restart(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="キャンセル", style=discord.ButtonStyle.secondary, emoji="❌"
+    )
+    async def cancel_restart(
+        self, interaction: discord.Interaction, button: discord.ui.Button  # pylint: disable=unused-argument
+    ):
         """Handle restart cancellation."""
         # Disable all buttons
         for item in self.children:
             item.disabled = True
-        
+
         await interaction.response.edit_message(
-            content="❌ ARKサーバーの再起動がキャンセルされました。",
-            view=self
+            content="❌ ARKサーバーの再起動がキャンセルされました。", view=self
         )
 
     async def on_timeout(self):
@@ -152,15 +158,15 @@ class ArkDiscordBot(commands.Bot):
 
             # Create confirmation view
             view = RestartConfirmationView(self)
-            
+
             embed = discord.Embed(
                 title="⚠️ ARKサーバー再起動の確認",
                 description="本当にARKサーバーを再起動しますか？\n\n"
-                           "⚠️ **注意**: 再起動中はプレイヤーが切断され、"
-                           "サーバーが再度利用可能になるまで数分かかります。",
-                color=0xff9900
+                "⚠️ **注意**: 再起動中はプレイヤーが切断され、"
+                "サーバーが再度利用可能になるまで数分かかります。",
+                color=0xFF9900,
             )
-            
+
             await ctx.send(embed=embed, view=view)
 
         except Exception as e:
