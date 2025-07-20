@@ -103,6 +103,33 @@ This project follows TDD principles with 37 comprehensive test cases. Always:
 2. Write tests for new functionality
 3. Use mocking for external dependencies (K8s API, RCON, Discord)
 
+### Code Quality and Pre-commit Checks
+**IMPORTANT**: Before making any commits, ALWAYS run the following commands to ensure code quality:
+
+```bash
+# 1. Format code (required)
+uv run black src/ tests/
+uv run isort src/ tests/
+
+# 2. Run linting (required) 
+uv run pylint src/ark_discord_bot/
+
+# 3. Run all tests (required)
+uv run pytest tests/ -v
+
+# Alternative: Use Makefile for all checks
+make format && make lint && make test
+```
+
+**Commit Workflow:**
+1. Make code changes
+2. Run formatting: `uv run black src/ tests/ && uv run isort src/ tests/`
+3. Check linting: `uv run pylint src/ark_discord_bot/`
+4. Run tests: `uv run pytest tests/ -v`
+5. Only commit if all checks pass
+
+This ensures all commits maintain code quality and don't break existing functionality.
+
 ### Error Handling
 Follow existing patterns:
 - Comprehensive try/catch blocks
