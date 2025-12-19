@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Discord bot for managing ARK: Survival Ascended server"
 authors = [{name = "boxp", email = "boxp@example.com"}]
 dependencies = [
-    "discord.py==2.3.2",
+    "discord.py==2.6.4",
     "kubernetes==28.1.0",
     "pyyaml==6.0.1",
     "python-dotenv==1.0.0",
