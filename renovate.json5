@@ -1,0 +1,26 @@
+{
+  extends: [
+    'config:recommended',
+    'github>suzuki-shunsuke/renovate-config#3.3.1',
+  ],
+  labels: [
+    'renovate:{{depName}}',
+    'renovate:{{depName}}/{{newVersion}}',
+    'datasource:{{datasource}}',
+  ],
+  major: {
+    automerge: false,
+  },
+  prHourlyLimit: 10,
+  prConcurrentLimit: 10,
+  branchConcurrentLimit: 20,
+  packageRules: [
+    {
+      additionalBranchPrefix: '{{packageFileDir}}-',
+      commitMessageSuffix: '({{packageFileDir}})',
+      matchPackageNames: [
+        '/.*/',
+      ],
+    },
+  ],
+}
