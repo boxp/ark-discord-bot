@@ -1,4 +1,4 @@
-discord.py==2.3.2
+discord.py==2.6.4
 kubernetes==28.1.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
