@@ -9,7 +9,7 @@ description = "Discord bot for managing ARK: Survival Ascended server"
 authors = [{name = "boxp", email = "boxp@example.com"}]
 dependencies = [
     "discord.py==2.6.4",
-    "kubernetes==28.1.0",
+    "kubernetes==34.1.0",
     "pyyaml==6.0.3",
     "python-dotenv==1.2.1",
     "aiohttp==3.13.2",
