@@ -29,6 +29,9 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 
+[tool.isort]
+profile = "black"
+
 [dependency-groups]
 dev = [
     "black>=25.1.0",

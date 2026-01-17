@@ -66,6 +66,13 @@ class ServerMonitor:
         try:
             current_status = await self.server_status_checker.get_server_status()
 
+            # Skip notification and status update for transient errors
+            if current_status == "transient_error":
+                logger.debug(
+                    "Transient error detected, maintaining last status and skipping notification"
+                )
+                return
+
             if self.last_status != current_status:
                 await self._send_status_notification(current_status, self.last_status)
                 self.last_status = current_status

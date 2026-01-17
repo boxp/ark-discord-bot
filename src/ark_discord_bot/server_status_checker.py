@@ -40,15 +40,18 @@ class ServerStatusChecker:
                 - 'running': Server is running and RCON accessible
                 - 'starting': K8s pods are running but RCON not yet accessible
                 - 'not_ready': K8s deployment not ready
-                - 'error': Error occurred during status check
+                - 'transient_error': Temporary infrastructure error (no Discord notification)
+                - 'error': Persistent error (sends Discord notification)
         """
         try:
             # First check Kubernetes deployment status
             k8s_status = await self.kubernetes_manager.get_server_status()
 
+            if k8s_status == "transient_error":
+                return "transient_error"
             if k8s_status == "error":
                 return "error"
-            elif k8s_status == "not_ready":
+            if k8s_status == "not_ready":
                 return "not_ready"
 
             # If K8s deployment is running, check actual RCON connectivity
@@ -56,9 +59,8 @@ class ServerStatusChecker:
 
             if rcon_accessible:
                 return "running"
-            else:
-                # Pods are running but RCON not accessible yet (server still starting)
-                return "starting"
+            # Pods are running but RCON not accessible yet (server still starting)
+            return "starting"
 
         except Exception as e:
             logger.error(f"Unexpected error getting server status: {e}")
@@ -113,7 +115,7 @@ class ServerStatusChecker:
             if status == "running":
                 logger.info("Server is now ready and RCON accessible")
                 return True
-            elif status == "error":
+            if status == "error":
                 logger.error("Server status check returned error")
                 return False
 
