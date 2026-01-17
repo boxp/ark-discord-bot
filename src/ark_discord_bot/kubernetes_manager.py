@@ -14,10 +14,9 @@ def is_transient_k8s_error(exception: Exception) -> bool:
     """Check if a Kubernetes API error is transient (temporary infrastructure issue).
 
     Transient errors include:
-    - etcd leader changes (HTTP 500)
-    - Service unavailable (HTTP 503)
-    - Connection timeouts
-    - Network-related errors
+    - etcd leader changes (HTTP 500 with specific error messages)
+    - etcd request timeouts (HTTP 500 with specific error messages)
+    - etcd no leader errors (HTTP 500 with specific error messages)
 
     Args:
         exception: The exception to check
@@ -37,10 +36,6 @@ def is_transient_k8s_error(exception: Exception) -> bool:
             "etcdserver: no leader",
         ]
         return any(msg in error_body for msg in transient_messages)
-
-    # HTTP 503 Service Unavailable is transient
-    if exception.status == 503:
-        return True
 
     return False
 
