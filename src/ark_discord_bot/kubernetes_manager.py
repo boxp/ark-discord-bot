@@ -10,6 +10,41 @@ from kubernetes.client.rest import ApiException
 logger = logging.getLogger(__name__)
 
 
+def is_transient_k8s_error(exception: Exception) -> bool:
+    """Check if a Kubernetes API error is transient (temporary infrastructure issue).
+
+    Transient errors include:
+    - etcd leader changes (HTTP 500)
+    - Service unavailable (HTTP 503)
+    - Connection timeouts
+    - Network-related errors
+
+    Args:
+        exception: The exception to check
+
+    Returns:
+        bool: True if the error is transient, False otherwise
+    """
+    if not isinstance(exception, ApiException):
+        return False
+
+    # HTTP 500 errors with specific etcd messages are transient
+    if exception.status == 500:
+        error_body = str(exception.body) if exception.body else ""
+        transient_messages = [
+            "etcdserver: leader changed",
+            "etcdserver: request timed out",
+            "etcdserver: no leader",
+        ]
+        return any(msg in error_body for msg in transient_messages)
+
+    # HTTP 503 Service Unavailable is transient
+    if exception.status == 503:
+        return True
+
+    return False
+
+
 class KubernetesManager:
     """Manages Kubernetes operations for ARK server."""
 
@@ -80,7 +115,11 @@ class KubernetesManager:
         """Get the current status of the ARK server.
 
         Returns:
-            str: Status of the server ('running', 'not_ready', 'error')
+            str: Status of the server
+                - 'running': Server deployment is running
+                - 'not_ready': Server deployment is not ready
+                - 'transient_error': Temporary infrastructure error (no Discord notification)
+                - 'error': Persistent error (sends Discord notification)
         """
         try:
             apps_v1 = client.AppsV1Api()
@@ -97,10 +136,15 @@ class KubernetesManager:
                 and deployment.status.ready_replicas > 0
             ):
                 return "running"
-            else:
-                return "not_ready"
+            return "not_ready"
 
         except ApiException as e:
+            # Check if this is a transient error (e.g., etcd leader change)
+            if is_transient_k8s_error(e):
+                logger.warning(
+                    f"Transient K8s API error (no notification): {e.status} - {e.reason}"
+                )
+                return "transient_error"
             logger.error(f"Failed to get server status: {e}")
             return "error"
         except Exception as e:

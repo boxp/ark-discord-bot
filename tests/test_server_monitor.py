@@ -180,3 +180,52 @@ class TestServerMonitor:
 
         # Verify second call succeeded
         assert server_monitor.last_status == "running"
+
+    @pytest.mark.asyncio
+    async def test_transient_error_no_notification(self, server_monitor):
+        """Test that transient errors do not trigger notifications."""
+        # Start with running status
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="transient_error"
+        )
+        server_monitor.discord_bot.send_message = AsyncMock()
+
+        await server_monitor._check_server_status()
+
+        # Verify no notification was sent
+        server_monitor.discord_bot.send_message.assert_not_called()
+        # Verify status was not updated (maintained previous status)
+        assert server_monitor.last_status == "running"
+
+    @pytest.mark.asyncio
+    async def test_transient_error_then_recovery(self, server_monitor):
+        """Test status change notification after transient error recovery."""
+        # Initial status is running
+        server_monitor.last_status = "running"
+
+        # First call returns transient_error
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            side_effect=["transient_error", "not_ready", "running"]
+        )
+        server_monitor.discord_bot.send_message = AsyncMock()
+
+        # First check - transient error (no notification, status maintained)
+        await server_monitor._check_server_status()
+        server_monitor.discord_bot.send_message.assert_not_called()
+        assert server_monitor.last_status == "running"
+
+        # Second check - status actually changes to not_ready (notification sent)
+        await server_monitor._check_server_status()
+        server_monitor.discord_bot.send_message.assert_called_once_with(
+            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+        )
+        assert server_monitor.last_status == "not_ready"
+
+        # Third check - status changes to running (notification sent)
+        await server_monitor._check_server_status()
+        assert server_monitor.discord_bot.send_message.call_count == 2
+        last_call = server_monitor.discord_bot.send_message.call_args_list[-1]
+        assert last_call[0][1] == "🟢 ARKサーバーが接続準備完了しました！ 🦕"
+        assert server_monitor.last_status == "running"

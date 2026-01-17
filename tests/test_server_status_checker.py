@@ -187,3 +187,17 @@ class TestServerStatusChecker:
         assert result is False
         # Should stop immediately on error
         mock_kubernetes_manager.get_server_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_server_status_transient_error(
+        self, server_status_checker, mock_kubernetes_manager, mock_rcon_manager
+    ):
+        """Test server status when K8s returns transient error."""
+        mock_kubernetes_manager.get_server_status.return_value = "transient_error"
+
+        status = await server_status_checker.get_server_status()
+
+        assert status == "transient_error"
+        mock_kubernetes_manager.get_server_status.assert_called_once()
+        # RCON should not be checked if K8s has transient error
+        mock_rcon_manager.send_command.assert_not_called()

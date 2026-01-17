@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from kubernetes.client.rest import ApiException
 
-from src.ark_discord_bot.kubernetes_manager import KubernetesManager
+from src.ark_discord_bot.kubernetes_manager import (
+    KubernetesManager,
+    is_transient_k8s_error,
+)
 
 
 class TestKubernetesManager:
@@ -127,3 +130,93 @@ class TestKubernetesManager:
             status = await k8s_manager.get_server_status()
 
             assert status == "error"
+
+    @pytest.mark.asyncio
+    async def test_get_server_status_transient_error_etcd_leader_changed(
+        self, k8s_manager
+    ):
+        """Test get_server_status when etcd leader changed error occurs."""
+        with patch(
+            "src.ark_discord_bot.kubernetes_manager.client.AppsV1Api"
+        ) as mock_apps_v1:
+            mock_api = Mock()
+            mock_apps_v1.return_value = mock_api
+
+            # Mock API exception with etcd leader changed error
+            exception = ApiException(status=500, reason="Internal Server Error")
+            exception.body = '{"message":"etcdserver: leader changed"}'
+            mock_api.read_namespaced_deployment.side_effect = exception
+
+            status = await k8s_manager.get_server_status()
+
+            assert status == "transient_error"
+
+    @pytest.mark.asyncio
+    async def test_get_server_status_transient_error_service_unavailable(
+        self, k8s_manager
+    ):
+        """Test get_server_status when service unavailable error occurs."""
+        with patch(
+            "src.ark_discord_bot.kubernetes_manager.client.AppsV1Api"
+        ) as mock_apps_v1:
+            mock_api = Mock()
+            mock_apps_v1.return_value = mock_api
+
+            # Mock API exception with 503 Service Unavailable
+            mock_api.read_namespaced_deployment.side_effect = ApiException(
+                status=503, reason="Service Unavailable"
+            )
+
+            status = await k8s_manager.get_server_status()
+
+            assert status == "transient_error"
+
+
+class TestIsTransientK8sError:
+    """Tests for is_transient_k8s_error function."""
+
+    def test_is_transient_error_etcd_leader_changed(self):
+        """Test that etcd leader changed error is recognized as transient."""
+        exception = ApiException(status=500, reason="Internal Server Error")
+        exception.body = '{"message":"etcdserver: leader changed"}'
+
+        assert is_transient_k8s_error(exception) is True
+
+    def test_is_transient_error_etcd_request_timeout(self):
+        """Test that etcd request timeout error is recognized as transient."""
+        exception = ApiException(status=500, reason="Internal Server Error")
+        exception.body = '{"message":"etcdserver: request timed out"}'
+
+        assert is_transient_k8s_error(exception) is True
+
+    def test_is_transient_error_etcd_no_leader(self):
+        """Test that etcd no leader error is recognized as transient."""
+        exception = ApiException(status=500, reason="Internal Server Error")
+        exception.body = '{"message":"etcdserver: no leader"}'
+
+        assert is_transient_k8s_error(exception) is True
+
+    def test_is_transient_error_service_unavailable(self):
+        """Test that 503 Service Unavailable is recognized as transient."""
+        exception = ApiException(status=503, reason="Service Unavailable")
+
+        assert is_transient_k8s_error(exception) is True
+
+    def test_is_not_transient_error_404(self):
+        """Test that 404 Not Found is not recognized as transient."""
+        exception = ApiException(status=404, reason="Not Found")
+
+        assert is_transient_k8s_error(exception) is False
+
+    def test_is_not_transient_error_500_without_etcd_message(self):
+        """Test that HTTP 500 without etcd message is not recognized as transient."""
+        exception = ApiException(status=500, reason="Internal Server Error")
+        exception.body = '{"message":"some error"}'
+
+        assert is_transient_k8s_error(exception) is False
+
+    def test_is_not_transient_error_generic_exception(self):
+        """Test that generic exception is not recognized as transient."""
+        exception = Exception("Some error")
+
+        assert is_transient_k8s_error(exception) is False
