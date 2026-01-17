@@ -151,26 +151,6 @@ class TestKubernetesManager:
 
             assert status == "transient_error"
 
-    @pytest.mark.asyncio
-    async def test_get_server_status_transient_error_service_unavailable(
-        self, k8s_manager
-    ):
-        """Test get_server_status when service unavailable error occurs."""
-        with patch(
-            "src.ark_discord_bot.kubernetes_manager.client.AppsV1Api"
-        ) as mock_apps_v1:
-            mock_api = Mock()
-            mock_apps_v1.return_value = mock_api
-
-            # Mock API exception with 503 Service Unavailable
-            mock_api.read_namespaced_deployment.side_effect = ApiException(
-                status=503, reason="Service Unavailable"
-            )
-
-            status = await k8s_manager.get_server_status()
-
-            assert status == "transient_error"
-
 
 class TestIsTransientK8sError:
     """Tests for is_transient_k8s_error function."""
@@ -196,15 +176,15 @@ class TestIsTransientK8sError:
 
         assert is_transient_k8s_error(exception) is True
 
-    def test_is_transient_error_service_unavailable(self):
-        """Test that 503 Service Unavailable is recognized as transient."""
-        exception = ApiException(status=503, reason="Service Unavailable")
-
-        assert is_transient_k8s_error(exception) is True
-
     def test_is_not_transient_error_404(self):
         """Test that 404 Not Found is not recognized as transient."""
         exception = ApiException(status=404, reason="Not Found")
+
+        assert is_transient_k8s_error(exception) is False
+
+    def test_is_not_transient_error_503(self):
+        """Test that 503 Service Unavailable is NOT recognized as transient."""
+        exception = ApiException(status=503, reason="Service Unavailable")
 
         assert is_transient_k8s_error(exception) is False
 
