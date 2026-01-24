@@ -8,7 +8,7 @@ from typing import Optional
 
 from .config import get_config
 from .discord_bot import ArkDiscordBot
-from .server_monitor import ServerMonitor
+from .server_monitor import MonitorConfig, ServerMonitor
 
 
 class ArkBotApplication:
@@ -54,11 +54,15 @@ class ArkBotApplication:
             self.bot = ArkDiscordBot(self.config)
 
             # Initialize server monitor
+            monitor_config = MonitorConfig(
+                channel_id=self.config["channel_id"],
+                check_interval=self.config["monitoring_interval"],
+                failure_threshold=self.config["failure_threshold"],
+            )
             self.monitor = ServerMonitor(
                 server_status_checker=self.bot.server_status_checker,
                 discord_bot=self.bot,
-                channel_id=self.config["channel_id"],
-                check_interval=self.config["monitoring_interval"],
+                config=monitor_config,
             )
 
             # Start monitoring task
