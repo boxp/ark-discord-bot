@@ -59,6 +59,7 @@ class ArkBotApplication:
                 discord_bot=self.bot,
                 channel_id=self.config["channel_id"],
                 check_interval=self.config["monitoring_interval"],
+                failure_threshold=self.config["failure_threshold"],
             )
 
             # Start monitoring task

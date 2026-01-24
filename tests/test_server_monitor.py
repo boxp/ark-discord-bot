@@ -229,3 +229,216 @@ class TestServerMonitor:
         last_call = server_monitor.discord_bot.send_message.call_args_list[-1]
         assert last_call[0][1] == "🟢 ARKサーバーが接続準備完了しました！ 🦕"
         assert server_monitor.last_status == "running"
+
+
+class TestServerMonitorDebounce:
+    """Tests for ServerMonitor debounce functionality."""
+
+    @pytest.fixture
+    def server_monitor_with_debounce(self):
+        """Create a ServerMonitor instance with debounce enabled."""
+        mock_status_checker = Mock()
+        mock_status_checker.get_server_status = AsyncMock()
+
+        mock_discord_bot = Mock()
+        mock_discord_bot.send_message = AsyncMock()
+
+        return ServerMonitor(
+            server_status_checker=mock_status_checker,
+            discord_bot=mock_discord_bot,
+            channel_id=123456789,
+            check_interval=1,
+            failure_threshold=3,  # Require 3 consecutive failures before notification
+        )
+
+    @pytest.mark.asyncio
+    async def test_single_failure_no_notification(self, server_monitor_with_debounce):
+        """Test that a single failure from running does not trigger notification."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="starting"
+        )
+
+        # Single failure should not trigger notification
+        await server_monitor._check_server_status()
+
+        server_monitor.discord_bot.send_message.assert_not_called()
+        # Internal status should still be running (not updated until threshold reached)
+        assert server_monitor.last_status == "running"
+        assert server_monitor._failure_count == 1
+
+    @pytest.mark.asyncio
+    async def test_two_failures_no_notification(self, server_monitor_with_debounce):
+        """Test that two consecutive failures do not trigger notification."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="starting"
+        )
+
+        # Two failures should not trigger notification
+        await server_monitor._check_server_status()
+        await server_monitor._check_server_status()
+
+        server_monitor.discord_bot.send_message.assert_not_called()
+        assert server_monitor.last_status == "running"
+        assert server_monitor._failure_count == 2
+
+    @pytest.mark.asyncio
+    async def test_three_failures_triggers_notification(
+        self, server_monitor_with_debounce
+    ):
+        """Test that three consecutive failures trigger notification."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="starting"
+        )
+
+        # Three failures should trigger notification
+        await server_monitor._check_server_status()
+        await server_monitor._check_server_status()
+        await server_monitor._check_server_status()
+
+        server_monitor.discord_bot.send_message.assert_called_once_with(
+            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+        )
+        assert server_monitor.last_status == "starting"
+        assert server_monitor._failure_count == 0  # Reset after notification
+
+    @pytest.mark.asyncio
+    async def test_recovery_resets_failure_count(self, server_monitor_with_debounce):
+        """Test that recovery to running resets the failure counter."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        # Two failures then recovery
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            side_effect=["starting", "starting", "running"]
+        )
+
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 1
+
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 2
+
+        # Recovery should reset counter and not send any notification
+        await server_monitor._check_server_status()
+        server_monitor.discord_bot.send_message.assert_not_called()
+        assert server_monitor._failure_count == 0
+        assert server_monitor.last_status == "running"
+
+    @pytest.mark.asyncio
+    async def test_recovery_from_degraded_state_sends_notification(
+        self, server_monitor_with_debounce
+    ):
+        """Test that recovery from degraded state sends notification immediately."""
+        server_monitor = server_monitor_with_debounce
+        # Simulate state where server was already in degraded state
+        server_monitor.last_status = "starting"
+        server_monitor._failure_count = 0
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="running"
+        )
+
+        await server_monitor._check_server_status()
+
+        # Recovery notification should be sent immediately (no debounce)
+        server_monitor.discord_bot.send_message.assert_called_once_with(
+            server_monitor.channel_id, "🟢 ARKサーバーが接続準備完了しました！ 🦕"
+        )
+        assert server_monitor.last_status == "running"
+
+    @pytest.mark.asyncio
+    async def test_error_state_triggers_immediate_notification(
+        self, server_monitor_with_debounce
+    ):
+        """Test that error state triggers notification immediately without debounce."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="error"
+        )
+
+        # Error should trigger immediate notification
+        await server_monitor._check_server_status()
+
+        server_monitor.discord_bot.send_message.assert_called_once_with(
+            server_monitor.channel_id,
+            "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。",
+        )
+        assert server_monitor.last_status == "error"
+
+    @pytest.mark.asyncio
+    async def test_not_ready_also_debounced(self, server_monitor_with_debounce):
+        """Test that not_ready status is also debounced."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            return_value="not_ready"
+        )
+
+        # First two failures - no notification
+        await server_monitor._check_server_status()
+        await server_monitor._check_server_status()
+        server_monitor.discord_bot.send_message.assert_not_called()
+
+        # Third failure - notification sent
+        await server_monitor._check_server_status()
+        server_monitor.discord_bot.send_message.assert_called_once_with(
+            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+        )
+
+    @pytest.mark.asyncio
+    async def test_default_failure_threshold_is_one(self):
+        """Test that default failure threshold is 1 (backward compatible)."""
+        mock_status_checker = Mock()
+        mock_status_checker.get_server_status = AsyncMock(return_value="starting")
+
+        mock_discord_bot = Mock()
+        mock_discord_bot.send_message = AsyncMock()
+
+        # Create without specifying failure_threshold (should default to 1)
+        server_monitor = ServerMonitor(
+            server_status_checker=mock_status_checker,
+            discord_bot=mock_discord_bot,
+            channel_id=123456789,
+            check_interval=1,
+        )
+        server_monitor.last_status = "running"
+
+        # With default threshold of 1, first failure should trigger notification
+        await server_monitor._check_server_status()
+
+        mock_discord_bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_mixed_failure_types_count_together(
+        self, server_monitor_with_debounce
+    ):
+        """Test that different non-running states count toward same failure counter."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        # Mix of starting and not_ready should count together
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            side_effect=["starting", "not_ready", "starting"]
+        )
+
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 1
+
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 2
+
+        await server_monitor._check_server_status()
+        # Third failure triggers notification
+        server_monitor.discord_bot.send_message.assert_called_once()

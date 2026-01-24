@@ -31,6 +31,7 @@ def get_config() -> Dict[str, Any]:
         "rcon_port": int(os.getenv("RCON_PORT", "27020")),
         "rcon_password": os.getenv("RCON_PASSWORD"),
         "monitoring_interval": int(os.getenv("MONITORING_INTERVAL", "30")),
+        "failure_threshold": int(os.getenv("FAILURE_THRESHOLD", "3")),
         "log_level": os.getenv("LOG_LEVEL", "INFO"),
     }
 

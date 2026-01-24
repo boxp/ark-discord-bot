@@ -16,6 +16,7 @@ class ServerMonitor:
         discord_bot,
         channel_id: int,
         check_interval: int = 30,
+        failure_threshold: int = 1,
     ):
         """Initialize ServerMonitor.
 
@@ -24,13 +25,16 @@ class ServerMonitor:
             discord_bot: Discord bot instance
             channel_id: Discord channel ID for notifications
             check_interval: Status check interval in seconds
+            failure_threshold: Number of consecutive failures before sending notification
         """
         self.server_status_checker = server_status_checker
         self.discord_bot = discord_bot
         self.channel_id = channel_id
         self.check_interval = check_interval
+        self.failure_threshold = failure_threshold
         self.last_status: Optional[str] = None
         self.is_monitoring = False
+        self._failure_count: int = 0
 
     async def start_monitoring(self):
         """Start monitoring server status."""
@@ -72,6 +76,38 @@ class ServerMonitor:
                     "Transient error detected, maintaining last status and skipping notification"
                 )
                 return
+
+            # Handle debounce logic for degraded states (starting, not_ready)
+            if self.last_status == "running" and current_status in [
+                "starting",
+                "not_ready",
+            ]:
+                self._failure_count += 1
+                logger.debug(
+                    f"Failure count: {self._failure_count}/{self.failure_threshold}"
+                )
+
+                if self._failure_count < self.failure_threshold:
+                    # Not enough consecutive failures, don't update status or notify
+                    return
+
+                # Threshold reached, reset counter and proceed with notification
+                self._failure_count = 0
+
+            # Recovery to running state - reset failure counter
+            if current_status == "running":
+                if self._failure_count > 0:
+                    # Was counting failures but recovered before threshold
+                    logger.debug(
+                        f"Recovery detected, resetting failure count from {self._failure_count}"
+                    )
+                    self._failure_count = 0
+                    # Don't send notification since we never reached degraded state
+                    return
+
+            # Error state - no debounce, immediate notification
+            if current_status == "error":
+                self._failure_count = 0
 
             if self.last_status != current_status:
                 await self._send_status_notification(current_status, self.last_status)
