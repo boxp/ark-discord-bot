@@ -2,36 +2,40 @@
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-class ServerMonitor:  # pylint: disable=too-many-instance-attributes
+@dataclass
+class MonitorConfig:
+    """Configuration for ServerMonitor."""
+
+    channel_id: int
+    check_interval: int = 30
+    failure_threshold: int = 1
+
+
+class ServerMonitor:
     """Monitors ARK server status and sends notifications."""
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(
         self,
         server_status_checker,
         discord_bot,
-        channel_id: int,
-        check_interval: int = 30,
-        failure_threshold: int = 1,
+        config: MonitorConfig,
     ):
         """Initialize ServerMonitor.
 
         Args:
             server_status_checker: ServerStatusChecker instance
             discord_bot: Discord bot instance
-            channel_id: Discord channel ID for notifications
-            check_interval: Status check interval in seconds
-            failure_threshold: Number of consecutive failures before sending notification
+            config: Monitor configuration
         """
         self.server_status_checker = server_status_checker
         self.discord_bot = discord_bot
-        self.channel_id = channel_id
-        self.check_interval = check_interval
-        self.failure_threshold = failure_threshold
+        self.config = config
         self.last_status: Optional[str] = None
         self.is_monitoring = False
         self._failure_count: int = 0
@@ -44,12 +48,12 @@ class ServerMonitor:  # pylint: disable=too-many-instance-attributes
         while self.is_monitoring:
             try:
                 await self._check_server_status()
-                await asyncio.sleep(self.check_interval)
+                await asyncio.sleep(self.config.check_interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(self.check_interval)
+                await asyncio.sleep(self.config.check_interval)
 
         logger.info("Server status monitoring stopped")
 
@@ -84,10 +88,10 @@ class ServerMonitor:  # pylint: disable=too-many-instance-attributes
             ]:
                 self._failure_count += 1
                 logger.debug(
-                    f"Failure count: {self._failure_count}/{self.failure_threshold}"
+                    f"Failure count: {self._failure_count}/{self.config.failure_threshold}"
                 )
 
-                if self._failure_count < self.failure_threshold:
+                if self._failure_count < self.config.failure_threshold:
                     # Not enough consecutive failures, don't update status or notify
                     return
 
@@ -143,7 +147,7 @@ class ServerMonitor:  # pylint: disable=too-many-instance-attributes
                 )
 
             if message:
-                await self.discord_bot.send_message(self.channel_id, message)
+                await self.discord_bot.send_message(self.config.channel_id, message)
                 logger.info(f"Sent status notification: {message}")
 
         except Exception as e:

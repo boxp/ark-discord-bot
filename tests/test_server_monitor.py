@@ -1,11 +1,11 @@
 """Tests for server monitoring functionality."""
 
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.ark_discord_bot.server_monitor import ServerMonitor
+from src.ark_discord_bot.server_monitor import MonitorConfig, ServerMonitor
 
 
 class TestServerMonitor:
@@ -20,11 +20,15 @@ class TestServerMonitor:
         mock_discord_bot = Mock()
         mock_discord_bot.send_message = AsyncMock()
 
+        config = MonitorConfig(
+            channel_id=123456789,
+            check_interval=1,  # 1 second for testing
+        )
+
         return ServerMonitor(
             server_status_checker=mock_status_checker,
             discord_bot=mock_discord_bot,
-            channel_id=123456789,
-            check_interval=1,  # 1 second for testing
+            config=config,
         )
 
     @pytest.mark.asyncio
@@ -67,7 +71,8 @@ class TestServerMonitor:
 
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id, "🟢 ARKサーバーが接続準備完了しました！ 🦕"
+            server_monitor.config.channel_id,
+            "🟢 ARKサーバーが接続準備完了しました！ 🦕",
         )
         assert server_monitor.last_status == "running"
 
@@ -88,7 +93,7 @@ class TestServerMonitor:
 
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id,
+            server_monitor.config.channel_id,
             "🟡 ARKサーバーポッドが稼働中、ゲームサーバー起動中...",
         )
         assert server_monitor.last_status == "starting"
@@ -108,7 +113,8 @@ class TestServerMonitor:
 
         # Verify notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+            server_monitor.config.channel_id,
+            "🟡 ARKサーバーが再起動中または準備未完了です...",
         )
         assert server_monitor.last_status == "not_ready"
 
@@ -124,7 +130,7 @@ class TestServerMonitor:
 
         # Verify error notification was sent
         server_monitor.discord_bot.send_message.assert_called_with(
-            server_monitor.channel_id,
+            server_monitor.config.channel_id,
             "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。",
         )
         assert server_monitor.last_status == "error"
@@ -219,7 +225,8 @@ class TestServerMonitor:
         # Second check - status actually changes to not_ready (notification sent)
         await server_monitor._check_server_status()
         server_monitor.discord_bot.send_message.assert_called_once_with(
-            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+            server_monitor.config.channel_id,
+            "🟡 ARKサーバーが再起動中または準備未完了です...",
         )
         assert server_monitor.last_status == "not_ready"
 
@@ -243,12 +250,16 @@ class TestServerMonitorDebounce:
         mock_discord_bot = Mock()
         mock_discord_bot.send_message = AsyncMock()
 
-        return ServerMonitor(
-            server_status_checker=mock_status_checker,
-            discord_bot=mock_discord_bot,
+        config = MonitorConfig(
             channel_id=123456789,
             check_interval=1,
             failure_threshold=3,  # Require 3 consecutive failures before notification
+        )
+
+        return ServerMonitor(
+            server_status_checker=mock_status_checker,
+            discord_bot=mock_discord_bot,
+            config=config,
         )
 
     @pytest.mark.asyncio
@@ -305,7 +316,8 @@ class TestServerMonitorDebounce:
         await server_monitor._check_server_status()
 
         server_monitor.discord_bot.send_message.assert_called_once_with(
-            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+            server_monitor.config.channel_id,
+            "🟡 ARKサーバーが再起動中または準備未完了です...",
         )
         assert server_monitor.last_status == "starting"
         assert server_monitor._failure_count == 0  # Reset after notification
@@ -351,7 +363,8 @@ class TestServerMonitorDebounce:
 
         # Recovery notification should be sent immediately (no debounce)
         server_monitor.discord_bot.send_message.assert_called_once_with(
-            server_monitor.channel_id, "🟢 ARKサーバーが接続準備完了しました！ 🦕"
+            server_monitor.config.channel_id,
+            "🟢 ARKサーバーが接続準備完了しました！ 🦕",
         )
         assert server_monitor.last_status == "running"
 
@@ -371,7 +384,7 @@ class TestServerMonitorDebounce:
         await server_monitor._check_server_status()
 
         server_monitor.discord_bot.send_message.assert_called_once_with(
-            server_monitor.channel_id,
+            server_monitor.config.channel_id,
             "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。",
         )
         assert server_monitor.last_status == "error"
@@ -394,7 +407,8 @@ class TestServerMonitorDebounce:
         # Third failure - notification sent
         await server_monitor._check_server_status()
         server_monitor.discord_bot.send_message.assert_called_once_with(
-            server_monitor.channel_id, "🟡 ARKサーバーが再起動中または準備未完了です..."
+            server_monitor.config.channel_id,
+            "🟡 ARKサーバーが再起動中または準備未完了です...",
         )
 
     @pytest.mark.asyncio
@@ -407,11 +421,11 @@ class TestServerMonitorDebounce:
         mock_discord_bot.send_message = AsyncMock()
 
         # Create without specifying failure_threshold (should default to 1)
+        config = MonitorConfig(channel_id=123456789, check_interval=1)
         server_monitor = ServerMonitor(
             server_status_checker=mock_status_checker,
             discord_bot=mock_discord_bot,
-            channel_id=123456789,
-            check_interval=1,
+            config=config,
         )
         server_monitor.last_status = "running"
 
