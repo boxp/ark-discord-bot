@@ -75,10 +75,17 @@ class ServerMonitor:
             current_status = await self.server_status_checker.get_server_status()
 
             # Skip notification and status update for transient errors
+            # Reset failure count to break consecutive failure streak
             if current_status == "transient_error":
-                logger.debug(
-                    "Transient error detected, maintaining last status and skipping notification"
-                )
+                if self._failure_count > 0:
+                    logger.debug(
+                        f"Transient error detected, resetting failure count from {self._failure_count}"
+                    )
+                    self._failure_count = 0
+                else:
+                    logger.debug(
+                        "Transient error detected, maintaining last status and skipping notification"
+                    )
                 return
 
             # Handle debounce logic for degraded states (starting, not_ready)

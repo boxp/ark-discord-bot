@@ -456,3 +456,36 @@ class TestServerMonitorDebounce:
         await server_monitor._check_server_status()
         # Third failure triggers notification
         server_monitor.discord_bot.send_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_transient_error_resets_failure_count(
+        self, server_monitor_with_debounce
+    ):
+        """Test that transient_error resets the failure counter (breaks consecutive streak)."""
+        server_monitor = server_monitor_with_debounce
+        server_monitor.last_status = "running"
+
+        # Sequence: starting -> transient_error -> starting -> starting
+        # transient_error should reset the counter, so only 2 consecutive failures after
+        server_monitor.server_status_checker.get_server_status = AsyncMock(
+            side_effect=["starting", "transient_error", "starting", "starting"]
+        )
+
+        # First failure
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 1
+
+        # Transient error should reset counter
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 0
+
+        # First failure after transient error
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 1
+
+        # Second failure - still not at threshold (3)
+        await server_monitor._check_server_status()
+        assert server_monitor._failure_count == 2
+
+        # No notification should have been sent (only 2 consecutive failures)
+        server_monitor.discord_bot.send_message.assert_not_called()
