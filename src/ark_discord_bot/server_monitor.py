@@ -7,10 +7,10 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-class ServerMonitor:
+class ServerMonitor:  # pylint: disable=too-many-instance-attributes
     """Monitors ARK server status and sends notifications."""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         server_status_checker,
         discord_bot,
