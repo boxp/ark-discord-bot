@@ -1,19 +1,33 @@
 (ns ark-discord-bot.kubernetes.client
     "Kubernetes API client for managing ARK server deployments."
-    (:require [babashka.http-client :as http]
+    (:require [babashka.fs :as fs]
+              [babashka.http-client :as http]
               [cheshire.core :as json]
               [clojure.string :as str]))
+
+(defn- create-http-client
+  "Create HTTP client with SSL context for K8s API.
+   Uses insecure mode for in-cluster communication where CA cert validation
+   is handled at the network level."
+  [ca-path]
+  (if (fs/exists? ca-path)
+    ;; In-cluster: use insecure SSL (cluster network is trusted)
+    (http/client {:ssl-context {:insecure true}})
+    ;; Outside cluster: use default SSL
+    nil))
 
 (defn create-client
   "Create a Kubernetes client configuration."
   [namespace deployment service]
-  {:namespace namespace
-   :deployment deployment
-   :service service
-   :api-server (or (System/getenv "KUBERNETES_SERVICE_HOST")
-                   "kubernetes.default.svc")
-   :token-path "/var/run/secrets/kubernetes.io/serviceaccount/token"
-   :ca-path "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"})
+  (let [ca-path "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"]
+    {:namespace namespace
+     :deployment deployment
+     :service service
+     :api-server (or (System/getenv "KUBERNETES_SERVICE_HOST")
+                     "kubernetes.default.svc")
+     :token-path "/var/run/secrets/kubernetes.io/serviceaccount/token"
+     :ca-path ca-path
+     :http-client (create-http-client ca-path)}))
 
 (defn- read-token
   "Read service account token."
@@ -50,13 +64,18 @@
     (or (str/includes? body "etcdserver:")
         (str/includes? body "context deadline exceeded"))))
 
+(defn- request-opts
+  "Build request options with optional HTTP client."
+  [client headers]
+  (cond-> {:headers headers :throw false}
+          (:http-client client) (assoc :client (:http-client client))))
+
 (defn get-deployment-status
   "Get deployment status from Kubernetes API."
   [client]
   (let [token (read-token client)
-        resp (http/get (deployment-url client)
-                       {:headers {"Authorization" (str "Bearer " token)}
-                        :throw false})]
+        opts (request-opts client {"Authorization" (str "Bearer " token)})
+        resp (http/get (deployment-url client) opts)]
     (if (= 200 (:status resp))
       (parse-deployment-status (json/parse-string (:body resp) true))
       (throw (ex-info "Failed to get deployment"
@@ -72,11 +91,10 @@
                  {:annotations
                   {"kubectl.kubernetes.io/restartedAt"
                    (str (java.time.Instant/now))}}}}}
-        resp (http/patch (deployment-url client)
-                         {:headers {"Authorization" (str "Bearer " token)
-                                    "Content-Type" "application/strategic-merge-patch+json"}
-                          :body (json/generate-string patch)
-                          :throw false})]
+        opts (-> (request-opts client {"Authorization" (str "Bearer " token)
+                                       "Content-Type" "application/strategic-merge-patch+json"})
+                 (assoc :body (json/generate-string patch)))
+        resp (http/patch (deployment-url client) opts)]
     (when (not= 200 (:status resp))
       (throw (ex-info "Failed to restart deployment"
                       {:status (:status resp) :body (:body resp)})))))

@@ -8,7 +8,18 @@
     (let [c (k8s/create-client "default" "ark-server" "ark-service")]
       (is (= "default" (:namespace c)))
       (is (= "ark-server" (:deployment c)))
-      (is (= "ark-service" (:service c))))))
+      (is (= "ark-service" (:service c)))))
+
+  (testing "create-client includes CA path for SSL"
+    (let [c (k8s/create-client "default" "ark-server" "ark-service")]
+      (is (= "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+             (:ca-path c)))))
+
+  (testing "create-client includes http-client key"
+    (let [c (k8s/create-client "default" "ark-server" "ark-service")]
+      ;; http-client is nil outside K8s cluster (no CA cert file)
+      ;; but the key should exist in the client map
+      (is (contains? c :http-client)))))
 
 (deftest test-parse-deployment-status-ready
   (testing "parse-deployment-status extracts ready replicas"
