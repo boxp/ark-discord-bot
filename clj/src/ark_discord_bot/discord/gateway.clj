@@ -78,6 +78,21 @@
                           :interaction-token (:token data)}
         nil))))
 
+(defn create-close-handler
+  "Create WebSocket close handler."
+  [running-atom]
+  (fn [_ws code reason]
+    (reset! running-atom false)
+    (println (str "[info] [gateway] Connection closed: code=" code
+                  ", reason=" reason))))
+
+(defn create-error-handler
+  "Create WebSocket error handler."
+  []
+  (fn [_ws error]
+    (println (str "[error] [gateway] WebSocket error: "
+                  (.getMessage error)))))
+
 (defn connect
   "Connect to Discord Gateway.
    on-message is called with MESSAGE_CREATE data.
@@ -90,20 +105,28 @@
   ([token on-message on-interaction on-ready]
    (let [seq-atom (atom nil)
          running-atom (atom true)]
-     (ws/websocket
-      {:uri gateway-url
-       :on-message
-       (fn [_ws msg]
-         (let [data (json/parse-string msg true)
-               op (:op data)
-               event-type (:t data)]
-           (cond
-             (= op (:hello opcodes))
-             (handle-hello _ws token (:d data) seq-atom running-atom)
+     (println "[info] [gateway] Connecting to Discord Gateway...")
+     (try
+       (ws/websocket
+        {:uri gateway-url
+         :on-open
+         (fn [_ws]
+           (println "[info] [gateway] WebSocket connection established"))
+         :on-message
+         (fn [_ws msg]
+           (let [data (json/parse-string msg true)
+                 op (:op data)
+                 event-type (:t data)]
+             (cond
+               (= op (:hello opcodes))
+               (handle-hello _ws token (:d data) seq-atom running-atom)
 
-             (= op (:dispatch opcodes))
-             (handle-dispatch data event-type on-message
-                              on-interaction on-ready seq-atom))))
-       :on-close
-       (fn [_ws _code _reason]
-         (reset! running-atom false))}))))
+               (= op (:dispatch opcodes))
+               (handle-dispatch data event-type on-message
+                                on-interaction on-ready seq-atom))))
+         :on-close (create-close-handler running-atom)
+         :on-error (create-error-handler)})
+       (catch Exception e
+         (println (str "[error] [gateway] Failed to connect: "
+                       (.getMessage e)))
+         (throw e))))))

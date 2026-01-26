@@ -40,5 +40,24 @@
                 :token "token123"}]
       (is (nil? (gateway/parse-interaction data))))))
 
+(deftest test-create-close-handler
+  (testing "create-close-handler returns a function"
+    (let [running-atom (atom true)
+          handler (gateway/create-close-handler running-atom)]
+      (is (fn? handler))))
+  (testing "close handler sets running-atom to false"
+    (let [running-atom (atom true)
+          handler (gateway/create-close-handler running-atom)]
+      (handler nil 1000 "Normal closure")
+      (is (false? @running-atom)))))
+
+(deftest test-create-error-handler
+  (testing "create-error-handler returns a function"
+    (let [handler (gateway/create-error-handler)]
+      (is (fn? handler))))
+  (testing "error handler does not throw"
+    (let [handler (gateway/create-error-handler)]
+      (is (nil? (handler nil (Exception. "Test error")))))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.discord.gateway-test)
