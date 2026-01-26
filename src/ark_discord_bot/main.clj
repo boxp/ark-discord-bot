@@ -219,7 +219,7 @@
     (log :info "Bot is running. Press Ctrl+C to stop.")
     ;; Wait for shutdown signal
     (while (not (state/system-shutdown?))
-      (Thread/sleep 1000))))
+           (Thread/sleep 1000))))
 
 ;; Entry point for bb start
 (when (= *file* (System/getProperty "babashka.file"))
