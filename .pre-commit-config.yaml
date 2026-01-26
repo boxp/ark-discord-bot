@@ -1,0 +1,47 @@
+repos:
+  # Python hooks (existing)
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3
+        files: ^src/|^tests/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        files: ^src/|^tests/
+
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: uv run pylint
+        language: system
+        types: [python]
+        files: ^src/ark_discord_bot/
+
+  # Clojure hooks
+  - repo: local
+    hooks:
+      - id: cljfmt-check
+        name: cljfmt (Clojure formatter check)
+        entry: bash -c 'cd clj && bb format:check'
+        language: system
+        files: ^clj/.*\.clj$
+        pass_filenames: false
+
+      - id: clj-kondo
+        name: clj-kondo (Clojure linter)
+        entry: bash -c 'cd clj && bb lint'
+        language: system
+        files: ^clj/.*\.clj$
+        pass_filenames: false
+
+      - id: clj-tests
+        name: Clojure tests
+        entry: bash -c 'cd clj && bb test'
+        language: system
+        files: ^clj/.*\.clj$
+        pass_filenames: false

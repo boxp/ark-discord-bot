@@ -5,17 +5,13 @@ on:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'Dockerfile'
-      - 'requirements.txt'
+      - 'clj/**'
       - '.github/workflows/build-and-deploy.yml'
   pull_request:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'Dockerfile'
-      - 'requirements.txt'
+      - 'clj/**'
       - '.github/workflows/build-and-deploy.yml'
 
 env:
@@ -59,6 +55,7 @@ jobs:
         echo "Generated image URI: ${IMAGE_URI}"
 
     - name: Build Docker image
+      working-directory: clj
       run: |
         docker build \
           --tag ${{ steps.image-info.outputs.image-uri }} \

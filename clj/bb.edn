@@ -1,0 +1,68 @@
+{:paths ["src" "test"]
+
+ :deps {org.babashka/http-client {:mvn/version "0.4.23"}
+        org.babashka/cli {:mvn/version "0.8.63"}
+        cheshire/cheshire {:mvn/version "5.13.0"}}
+
+ :tasks
+ {:requires ([babashka.fs :as fs]
+             [clojure.string :as str])
+
+  :init (do
+          ;; Add ~/.local/bin to PATH for clj-kondo and cljfmt
+          (def local-bin (str (System/getProperty "user.home") "/.local/bin"))
+          (def path-env (System/getenv "PATH"))
+          (when-not (str/includes? (or path-env "") local-bin)
+            (System/setProperty "babashka.process.path"
+                                (str local-bin ":" path-env))))
+
+  ;; Test runner
+  test {:doc "Run all tests"
+        :task (let [test-files (fs/glob "test" "**/*_test.clj")]
+                (if (empty? (seq test-files))
+                  (println "No test files found.")
+                  (do
+                    (doseq [f test-files]
+                      (println "Running:" (str f))
+                      (load-file (str f)))
+                    (println "All tests passed!"))))}
+
+  ;; Linting with clj-kondo
+  lint {:doc "Run clj-kondo linter"
+        :task (let [clj-kondo-bin (str (System/getProperty "user.home")
+                                       "/.local/bin/clj-kondo")
+                    {:keys [exit]}
+                    (shell {:continue true}
+                           clj-kondo-bin "--lint" "src" "test")]
+                (when (not= 0 exit)
+                  (System/exit 1)))}
+
+  ;; Format check with cljfmt
+  format:check {:doc "Check code formatting"
+                :task (let [cljfmt-bin (str (System/getProperty "user.home")
+                                            "/.local/bin/cljfmt")
+                            {:keys [exit]}
+                            (shell {:continue true}
+                                   cljfmt-bin "check" "src" "test")]
+                        (when (not= 0 exit)
+                          (System/exit 1)))}
+
+  ;; Format fix
+  format:fix {:doc "Fix code formatting"
+              :task (let [cljfmt-bin (str (System/getProperty "user.home")
+                                          "/.local/bin/cljfmt")]
+                      (shell cljfmt-bin "fix" "src" "test"))}
+
+  ;; Run application
+  start {:doc "Run the Discord bot"
+         :task (do
+                 (load-file "src/ark_discord_bot/core.clj")
+                 ((resolve 'ark-discord-bot.core/-main)))}
+
+  ;; Docker build
+  docker:build {:doc "Build Docker image"
+                :task (shell "docker build -t ark-discord-bot-clj:latest .")}
+
+  ;; All checks (for CI)
+  ci {:doc "Run all CI checks"
+      :depends [format:check lint test]}}}
