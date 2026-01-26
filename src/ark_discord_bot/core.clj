@@ -45,26 +45,27 @@
 
 (defn- handle-command
   "Handle a parsed command."
-  [cmd discord-client k8s-client rcon-client config _channel-id]
+  [cmd discord-client k8s-client rcon-client config channel-id]
   (case (:command cmd)
     :help
-    (discord/send-message discord-client (commands/format-help))
+    (discord/send-message discord-client (commands/format-help) channel-id)
 
     :status
     (let [result (check-status k8s-client rcon-client config)]
       (discord/send-status-message discord-client
                                    (:status result)
-                                   (checker/format-status-message result)))
+                                   (checker/format-status-message result)
+                                   channel-id))
 
     :players
     (let [rcon-result (check-rcon-status rcon-client (:rcon-timeout config))
           msg (if (:connected rcon-result)
                 (commands/format-players (:players rcon-result []))
                 (commands/format-players-error))]
-      (discord/send-message discord-client msg))
+      (discord/send-message discord-client msg channel-id))
 
     :restart
-    (discord/send-restart-confirmation discord-client)
+    (discord/send-restart-confirmation discord-client channel-id)
 
     nil))
 

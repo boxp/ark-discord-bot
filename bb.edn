@@ -60,7 +60,7 @@
 
   ;; Docker build
   docker:build {:doc "Build Docker image"
-                :task (shell "docker build -t ark-discord-bot-clj:latest .")}
+                :task (shell "docker build -t ark-discord-bot:latest .")}
 
   ;; All checks (for CI)
   ci {:doc "Run all CI checks"

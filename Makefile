@@ -1,43 +1,39 @@
-.PHONY: help install test lint format build docker-build docker-run k8s-deploy k8s-delete clean
+.PHONY: test lint format format-check ci run docker-build docker-run clean
 
-help: ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+# Default target
+all: ci
 
-install: ## Install dependencies
-	pip install -r requirements.txt
+# Run all tests
+test:
+	bb test
 
-test: ## Run tests
-	pytest tests/ -v
+# Run linter
+lint:
+	bb lint
 
-lint: ## Run linting
-	pylint src/ark_discord_bot/
+# Check code formatting
+format-check:
+	bb format:check
 
-format: ## Format code
-	black src/ tests/
-	isort src/ tests/
+# Fix code formatting
+format:
+	bb format:fix
 
-build: ## Build the application
-	python -m build
+# Run all CI checks
+ci: format-check lint test
 
-docker-build: ## Build Docker image
-	docker build -t ark-discord-bot:latest .
+# Run the bot
+run:
+	bb run
 
-docker-run: ## Run Docker container
-	docker-compose up -d
+# Docker build
+docker-build:
+	bb docker:build
 
-docker-stop: ## Stop Docker container
-	docker-compose down
+# Docker run
+docker-run:
+	docker run --env-file ../.env ark-discord-bot-clj:latest
 
-k8s-deploy: ## Deploy to Kubernetes
-	kubectl apply -k k8s/
-
-k8s-delete: ## Delete from Kubernetes
-	kubectl delete -k k8s/
-
-clean: ## Clean build artifacts
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info/
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+# Clean generated files
+clean:
+	rm -rf .cpcache .clj-kondo/.cache target
