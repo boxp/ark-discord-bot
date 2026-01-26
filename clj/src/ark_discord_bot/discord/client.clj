@@ -95,9 +95,23 @@
    :data {:content content}})
 
 (defn build-interaction-update
-  "Build interaction update message response."
+  "Build interaction update message response with disabled buttons."
   [content]
-  (build-interaction-response 7 content))
+  {:type 7  ;; UPDATE_MESSAGE
+   :data {:content content
+          :components [{:type 1
+                        :components [{:type 2
+                                      :style 4
+                                      :label "再起動する"
+                                      :emoji {:name "🔄"}
+                                      :custom_id "restart_confirm"
+                                      :disabled true}
+                                     {:type 2
+                                      :style 2
+                                      :label "キャンセル"
+                                      :emoji {:name "❌"}
+                                      :custom_id "restart_cancel"
+                                      :disabled true}]}]}})
 
 (defn send-restart-confirmation
   "Send restart confirmation with buttons."

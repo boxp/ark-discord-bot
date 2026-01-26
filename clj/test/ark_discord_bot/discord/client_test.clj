@@ -63,10 +63,16 @@
       (is (= "テストメッセージ" (get-in result [:data :content]))))))
 
 (deftest test-build-interaction-update
-  (testing "build-interaction-update creates update message response"
+  (testing "build-interaction-update creates update message response with disabled buttons"
     (let [result (discord/build-interaction-update "更新メッセージ")]
       (is (= 7 (:type result)))  ;; UPDATE_MESSAGE type
-      (is (= "更新メッセージ" (get-in result [:data :content]))))))
+      (is (= "更新メッセージ" (get-in result [:data :content])))
+      ;; Check that components with disabled buttons are included
+      (let [components (get-in result [:data :components])
+            action-row (first components)
+            buttons (:components action-row)]
+        (is (= 1 (count components)))  ;; One action row
+        (is (every? :disabled buttons))))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.discord.client-test)
