@@ -1,9 +1,9 @@
 # ARK Discord Bot - Babashka/Clojure
 FROM babashka/babashka:latest
 
-# Create non-root user
-RUN addgroup --gid 10000 appgroup && \
-    adduser --uid 10000 --gid 10000 --disabled-password --gecos "" appuser
+# Create non-root user (Ubuntu-based image uses groupadd/useradd)
+RUN groupadd --gid 10000 appgroup && \
+    useradd --uid 10000 --gid 10000 --no-create-home --shell /bin/false appuser
 
 WORKDIR /app
 
