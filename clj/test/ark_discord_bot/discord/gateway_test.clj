@@ -59,5 +59,12 @@
     (let [handler (gateway/create-error-handler)]
       (is (nil? (handler nil (Exception. "Test error")))))))
 
+(deftest test-opcode-name
+  (testing "opcode-name returns correct names"
+    (is (= "DISPATCH" (gateway/opcode-name 0)))
+    (is (= "HELLO" (gateway/opcode-name 10)))
+    (is (= "INVALID_SESSION" (gateway/opcode-name 9)))
+    (is (= "UNKNOWN(99)" (gateway/opcode-name 99)))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.discord.gateway-test)
