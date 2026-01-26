@@ -80,5 +80,20 @@
       (is (= 5 (:failure-threshold cfg)))
       (is (= 10000 (:rcon-timeout cfg))))))
 
+(deftest test-reset-gateway-state
+  (testing "reset-gateway-state! resets gateway to initial values"
+    (state/init-state! {:failure-threshold 3})
+    ;; Modify gateway state
+    (state/update-gateway-seq! 42)
+    (state/set-gateway-running! false)
+    (state/append-to-msg-buffer! "stale data")
+    ;; Reset
+    (state/reset-gateway-state!)
+    ;; Verify reset
+    (let [gw (state/get-gateway-state)]
+      (is (nil? (:seq gw)))
+      (is (true? (:running? gw)))
+      (is (= "" (:msg-buffer gw))))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.state-test)

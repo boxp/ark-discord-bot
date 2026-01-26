@@ -96,18 +96,12 @@
         nil))))
 
 (defn create-close-handler
-  "Create WebSocket close handler.
-   Accepts optional running-atom for backward compatibility in tests."
-  ([]
-   (fn [_ws code reason]
-     (state/set-gateway-running! false)
-     (println (str "[info] [gateway] Connection closed: code=" code
-                   ", reason=" reason))))
-  ([running-atom]
-   (fn [_ws code reason]
-     (reset! running-atom false)
-     (println (str "[info] [gateway] Connection closed: code=" code
-                   ", reason=" reason)))))
+  "Create WebSocket close handler."
+  []
+  (fn [_ws code reason]
+    (state/set-gateway-running! false)
+    (println (str "[info] [gateway] Connection closed: code=" code
+                  ", reason=" reason))))
 
 (defn create-error-handler
   "Create WebSocket error handler."
@@ -127,6 +121,8 @@
    (connect token on-message on-interaction nil))
   ([token on-message on-interaction on-ready]
    (println "[info] [gateway] Connecting to Discord Gateway...")
+   ;; Reset gateway state for clean reconnection
+   (state/reset-gateway-state!)
    (try
      (ws/websocket
       {:uri gateway-url

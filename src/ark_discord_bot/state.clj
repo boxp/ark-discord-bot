@@ -59,6 +59,13 @@
     (swap! app-state assoc-in [:gateway :msg-buffer] "")
     result))
 
+(defn reset-gateway-state!
+  "Reset gateway state to initial values for reconnection."
+  []
+  (swap! app-state assoc :gateway {:seq nil
+                                   :running? true
+                                   :msg-buffer ""}))
+
 ;; Monitor state accessors
 
 (defn get-monitor-state

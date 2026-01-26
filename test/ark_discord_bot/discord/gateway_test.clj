@@ -1,6 +1,7 @@
 (ns ark-discord-bot.discord.gateway-test
     "Tests for Discord Gateway."
     (:require [ark-discord-bot.discord.gateway :as gateway]
+              [ark-discord-bot.state :as state]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-parse-interaction-restart-confirm
@@ -42,14 +43,14 @@
 
 (deftest test-create-close-handler
   (testing "create-close-handler returns a function"
-    (let [running-atom (atom true)
-          handler (gateway/create-close-handler running-atom)]
+    (let [handler (gateway/create-close-handler)]
       (is (fn? handler))))
-  (testing "close handler sets running-atom to false"
-    (let [running-atom (atom true)
-          handler (gateway/create-close-handler running-atom)]
+  (testing "close handler sets gateway running to false"
+    (state/init-state! {:failure-threshold 3})
+    (is (true? (state/gateway-running?)))
+    (let [handler (gateway/create-close-handler)]
       (handler nil 1000 "Normal closure")
-      (is (false? @running-atom)))))
+      (is (false? (state/gateway-running?))))))
 
 (deftest test-create-error-handler
   (testing "create-error-handler returns a function"
