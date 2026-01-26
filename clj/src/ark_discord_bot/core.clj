@@ -99,14 +99,25 @@
   [discord-client k8s-client rcon-client config]
   (fn [msg]
     (let [content (:content msg)
-          channel-id (:channel_id msg)]
-      (when-let [cmd (commands/parse-command content)]
-        (log :info (str "Command: " (:command cmd)))
-        (try
-          (handle-command cmd discord-client k8s-client
-                          rcon-client config channel-id)
-          (catch Exception e
-            (log :error (str "Command error: " (.getMessage e)))))))))
+          channel-id (:channel_id msg)
+          author (:author msg)
+          is-bot? (:bot author)]
+      ;; Ignore messages from bots (including ourselves)
+      (when-not is-bot?
+        ;; Log message receipt for debugging (only if it looks like a command)
+        (when (and content (re-find #"(?i)^!ark" content))
+          (log :debug (str "Received message: " (pr-str content))))
+        ;; Warn if content is empty but message looks like it should have content
+        (when (and (nil? content) (not is-bot?))
+          (log :warn (str "Received message with empty content - "
+                          "check Message Content Intent in Discord Developer Portal")))
+        (when-let [cmd (commands/parse-command content)]
+          (log :info (str "Command: " (:command cmd)))
+          (try
+            (handle-command cmd discord-client k8s-client
+                            rcon-client config channel-id)
+            (catch Exception e
+              (log :error (str "Command error: " (.getMessage e))))))))))
 
 (defn- start-monitor-loop
   "Start background monitoring loop."
@@ -145,6 +156,15 @@
       (catch Exception e
         (log :error (str "Interaction error: " (.getMessage e)))))))
 
+(defn- create-ready-handler
+  "Create handler for READY event."
+  []
+  (fn [data]
+    (let [user (:user data)
+          username (:username user)]
+      (log :info (str "Connected to Discord as: " username))
+      (log :info "Bot is now ready to receive messages"))))
+
 (defn -main
   "Application entry point."
   [& _args]
@@ -166,7 +186,10 @@
     (log :info "Starting monitor loop...")
     (start-monitor-loop discord-client k8s-client rcon-client config monitor-state)
     (log :info "Connecting to Discord Gateway...")
-    (gateway/connect (:discord-token config) msg-handler interaction-handler)
+    (gateway/connect (:discord-token config)
+                     msg-handler
+                     interaction-handler
+                     (create-ready-handler))
     (log :info "Bot is running. Press Ctrl+C to stop.")
     @(promise)))
 

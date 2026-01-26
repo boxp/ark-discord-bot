@@ -54,9 +54,10 @@
 
 (defn- handle-dispatch
   "Handle DISPATCH opcode - process events."
-  [data event-type on-message on-interaction seq-atom]
+  [data event-type on-message on-interaction on-ready seq-atom]
   (reset! seq-atom (:s data))
   (case event-type
+    "READY" (when on-ready (on-ready (:d data)))
     "MESSAGE_CREATE" (when on-message (on-message (:d data)))
     "INTERACTION_CREATE" (when on-interaction (on-interaction (:d data)))
     nil))
@@ -80,10 +81,13 @@
 (defn connect
   "Connect to Discord Gateway.
    on-message is called with MESSAGE_CREATE data.
-   on-interaction is called with INTERACTION_CREATE data."
+   on-interaction is called with INTERACTION_CREATE data.
+   on-ready is called with READY event data (optional)."
   ([token on-message]
-   (connect token on-message nil))
+   (connect token on-message nil nil))
   ([token on-message on-interaction]
+   (connect token on-message on-interaction nil))
+  ([token on-message on-interaction on-ready]
    (let [seq-atom (atom nil)
          running-atom (atom true)]
      (ws/websocket
@@ -99,7 +103,7 @@
 
              (= op (:dispatch opcodes))
              (handle-dispatch data event-type on-message
-                              on-interaction seq-atom))))
+                              on-interaction on-ready seq-atom))))
        :on-close
        (fn [_ws _code _reason]
          (reset! running-atom false))}))))
