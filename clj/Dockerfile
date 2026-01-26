@@ -7,8 +7,8 @@ RUN groupadd --gid 10000 appgroup && \
 
 WORKDIR /app
 
-# Copy source files
-COPY bb.edn deps.edn ./
+# Copy source files (deps.edn is for Clojure CLI, not needed for babashka)
+COPY bb.edn ./
 COPY src/ ./src/
 
 # Set ownership
