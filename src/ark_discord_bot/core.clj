@@ -8,7 +8,8 @@
               [ark-discord-bot.kubernetes.client :as k8s]
               [ark-discord-bot.rcon.client :as rcon]
               [ark-discord-bot.server.monitor :as monitor]
-              [ark-discord-bot.server.status-checker :as checker]))
+              [ark-discord-bot.server.status-checker :as checker]
+              [ark-discord-bot.state :as state]))
 
 (defn- log
   "Simple logging helper."
@@ -122,27 +123,27 @@
 
 (defn- start-monitor-loop
   "Start background monitoring loop."
-  [discord-client k8s-client rcon-client config state-atom]
+  [discord-client k8s-client rcon-client config]
   (future
    (loop []
      (Thread/sleep (:monitor-interval config))
      (try
        (let [result (check-status k8s-client rcon-client config)
              new-status (:status result)
-             state @state-atom
+             monitor-state (state/get-monitor-state)
              is-failure? (not= :running new-status)
              ;; Calculate projected failure count after update
              projected-count (if is-failure?
-                               (inc (:failure-count state))
+                               (inc (:failure-count monitor-state))
                                0)
              notify? (monitor/should-notify-with-debounce?
-                      state new-status projected-count)]
+                      monitor-state new-status projected-count)]
          (when notify?
            (log :info (str "Status changed to: " new-status))
            (discord/send-status-message discord-client
                                         new-status
                                         (checker/format-status-message result)))
-         (swap! state-atom monitor/update-state new-status))
+         (state/update-monitor-state! new-status))
        (catch Exception e
          (when (not (k8s/is-transient-error? e))
            (log :error (str "Monitor error: " (.getMessage e))))))
@@ -171,6 +172,7 @@
   [& _args]
   (log :info "ARK Discord Bot starting...")
   (let [config (config/validate-config (config/load-config))
+        _ (state/init-state! config)
         discord-client (discord/create-client (:discord-token config)
                                               (:discord-channel-id config))
         k8s-client (k8s/create-client (:k8s-namespace config)
@@ -179,13 +181,12 @@
         rcon-client (rcon/create-client (:rcon-host config)
                                         (:rcon-port config)
                                         (:rcon-password config))
-        monitor-state (atom (monitor/create-state (:failure-threshold config)))
         msg-handler (create-message-handler discord-client k8s-client
                                             rcon-client config)
         interaction-handler (create-interaction-handler (:discord-token config)
                                                         k8s-client)]
     (log :info "Starting monitor loop...")
-    (start-monitor-loop discord-client k8s-client rcon-client config monitor-state)
+    (start-monitor-loop discord-client k8s-client rcon-client config)
     (log :info "Connecting to Discord Gateway...")
     (gateway/connect (:discord-token config)
                      msg-handler

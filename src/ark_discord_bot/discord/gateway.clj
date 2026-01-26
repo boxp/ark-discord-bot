@@ -1,6 +1,7 @@
 (ns ark-discord-bot.discord.gateway
     "Discord Gateway WebSocket client for receiving events."
-    (:require [babashka.http-client.websocket :as ws]
+    (:require [ark-discord-bot.state :as state]
+              [babashka.http-client.websocket :as ws]
               [cheshire.core :as json]))
 
 (def ^:private gateway-url "wss://gateway.discord.gg/?v=10&encoding=json")
@@ -51,27 +52,27 @@
 
 (defn- start-heartbeat
   "Start heartbeat loop in background."
-  [ws-client interval-ms seq-atom running-atom]
+  [ws-client interval-ms]
   (future
    (loop []
      (Thread/sleep interval-ms)
-     (when @running-atom
+     (when (state/gateway-running?)
        (try
-         (send-json ws-client (build-heartbeat @seq-atom))
-         (catch Exception _ (reset! running-atom false)))
+         (send-json ws-client (build-heartbeat (state/get-gateway-seq)))
+         (catch Exception _ (state/set-gateway-running! false)))
        (recur)))))
 
 (defn- handle-hello
   "Handle HELLO opcode - start heartbeat and identify."
-  [ws-client token data seq-atom running-atom]
+  [ws-client token data]
   (let [interval (:heartbeat_interval data)]
-    (start-heartbeat ws-client interval seq-atom running-atom)
+    (start-heartbeat ws-client interval)
     (send-json ws-client (build-identify token))))
 
 (defn- handle-dispatch
   "Handle DISPATCH opcode - process events."
-  [data event-type on-message on-interaction on-ready seq-atom]
-  (reset! seq-atom (:s data))
+  [data event-type on-message on-interaction on-ready]
+  (state/update-gateway-seq! (:s data))
   (case event-type
     "READY" (when on-ready (on-ready (:d data)))
     "MESSAGE_CREATE" (when on-message (on-message (:d data)))
@@ -96,9 +97,9 @@
 
 (defn create-close-handler
   "Create WebSocket close handler."
-  [running-atom]
+  []
   (fn [_ws code reason]
-    (reset! running-atom false)
+    (state/set-gateway-running! false)
     (println (str "[info] [gateway] Connection closed: code=" code
                   ", reason=" reason))))
 
@@ -119,51 +120,49 @@
   ([token on-message on-interaction]
    (connect token on-message on-interaction nil))
   ([token on-message on-interaction on-ready]
-   (let [seq-atom (atom nil)
-         running-atom (atom true)
-         msg-buffer (atom (StringBuilder.))]
-     (println "[info] [gateway] Connecting to Discord Gateway...")
-     (try
-       (ws/websocket
-        {:uri gateway-url
-         :on-open
-         (fn [_ws]
-           (println "[info] [gateway] WebSocket connection established"))
-         :on-message
-         (fn [_ws msg last?]
-           ;; Buffer fragmented messages
-           (.append @msg-buffer (str msg))
-           (when last?
-             (try
-               (let [full-msg (str @msg-buffer)
-                     _ (reset! msg-buffer (StringBuilder.))
-                     data (json/parse-string full-msg true)
-                     op (:op data)
-                     event-type (:t data)]
-                 ;; Log received opcode for debugging
-                 (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                               (when event-type (str ", event=" event-type))))
-                 (cond
-                   (= op (:hello opcodes))
-                   (handle-hello _ws token (:d data) seq-atom running-atom)
+   (println "[info] [gateway] Connecting to Discord Gateway...")
+   ;; Reset gateway state for clean reconnection
+   (state/reset-gateway-state!)
+   (try
+     (ws/websocket
+      {:uri gateway-url
+       :on-open
+       (fn [_ws]
+         (println "[info] [gateway] WebSocket connection established"))
+       :on-message
+       (fn [_ws msg last?]
+         ;; Buffer fragmented messages
+         (state/append-to-msg-buffer! (str msg))
+         (when last?
+           (try
+             (let [full-msg (state/clear-msg-buffer!)
+                   data (json/parse-string full-msg true)
+                   op (:op data)
+                   event-type (:t data)]
+               ;; Log received opcode for debugging
+               (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                             (when event-type (str ", event=" event-type))))
+               (cond
+                 (= op (:hello opcodes))
+                 (handle-hello _ws token (:d data))
 
-                   (= op (:dispatch opcodes))
-                   (handle-dispatch data event-type on-message
-                                    on-interaction on-ready seq-atom)
+                 (= op (:dispatch opcodes))
+                 (handle-dispatch data event-type on-message
+                                  on-interaction on-ready)
 
-                   (= op (:invalid-session opcodes))
-                   (do
-                    (println "[error] [gateway] Invalid session - check bot token")
-                    (reset! running-atom false))
+                 (= op (:invalid-session opcodes))
+                 (do
+                  (println "[error] [gateway] Invalid session - check bot token")
+                  (state/set-gateway-running! false))
 
-                   (= op (:reconnect opcodes))
-                   (println "[warn] [gateway] Server requested reconnect")))
-               (catch Exception e
-                 (println (str "[error] [gateway] on-message error: "
-                               (.getMessage e)))))))
-         :on-close (create-close-handler running-atom)
-         :on-error (create-error-handler)})
-       (catch Exception e
-         (println (str "[error] [gateway] Failed to connect: "
-                       (.getMessage e)))
-         (throw e))))))
+                 (= op (:reconnect opcodes))
+                 (println "[warn] [gateway] Server requested reconnect")))
+             (catch Exception e
+               (println (str "[error] [gateway] on-message error: "
+                             (.getMessage e)))))))
+       :on-close (create-close-handler)
+       :on-error (create-error-handler)})
+     (catch Exception e
+       (println (str "[error] [gateway] Failed to connect: "
+                     (.getMessage e)))
+       (throw e)))))
