@@ -46,26 +46,35 @@
       :get (http/get url opts))))
 
 (defn send-message
-  "Send a text message to the configured channel."
-  [client content]
-  (send-request client :post
-                (str "/channels/" (:channel-id client) "/messages")
-                {:content content}))
+  "Send a text message to a channel.
+   If channel-id is not provided, uses the client's default channel."
+  ([client content]
+   (send-message client content (:channel-id client)))
+  ([client content channel-id]
+   (send-request client :post
+                 (str "/channels/" channel-id "/messages")
+                 {:content content})))
 
 (defn send-embed
-  "Send an embed message to the configured channel."
-  [client embed]
-  (send-request client :post
-                (str "/channels/" (:channel-id client) "/messages")
-                {:embeds [embed]}))
+  "Send an embed message to a channel.
+   If channel-id is not provided, uses the client's default channel."
+  ([client embed]
+   (send-embed client embed (:channel-id client)))
+  ([client embed channel-id]
+   (send-request client :post
+                 (str "/channels/" channel-id "/messages")
+                 {:embeds [embed]})))
 
 (defn send-status-message
-  "Send a server status embed."
-  [client status details]
-  (let [embed (build-embed "ARK Server Status"
-                           (str (format-status status) "\n\n" details)
-                           (if (= :running status) :success :warning))]
-    (send-embed client embed)))
+  "Send a server status embed.
+   If channel-id is not provided, uses the client's default channel."
+  ([client status details]
+   (send-status-message client status details (:channel-id client)))
+  ([client status details channel-id]
+   (let [embed (build-embed "ARK Server Status"
+                            (str (format-status status) "\n\n" details)
+                            (if (= :running status) :success :warning))]
+     (send-embed client embed channel-id))))
 
 (defn build-restart-confirmation
   "Build restart confirmation embed with buttons."
@@ -114,12 +123,15 @@
                                       :disabled true}]}]}})
 
 (defn send-restart-confirmation
-  "Send restart confirmation with buttons."
-  [client]
-  (let [{:keys [embed components]} (build-restart-confirmation)]
-    (send-request client :post
-                  (str "/channels/" (:channel-id client) "/messages")
-                  {:embeds [embed] :components components})))
+  "Send restart confirmation with buttons.
+   If channel-id is not provided, uses the client's default channel."
+  ([client]
+   (send-restart-confirmation client (:channel-id client)))
+  ([client channel-id]
+   (let [{:keys [embed components]} (build-restart-confirmation)]
+     (send-request client :post
+                   (str "/channels/" channel-id "/messages")
+                   {:embeds [embed] :components components}))))
 
 (defn respond-to-interaction
   "Respond to a Discord interaction.
