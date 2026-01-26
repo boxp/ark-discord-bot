@@ -129,7 +129,7 @@
          (fn [_ws]
            (println "[info] [gateway] WebSocket connection established"))
          :on-message
-         (fn [_ws msg]
+         (fn [_ws msg _last]
            (let [data (json/parse-string msg true)
                  op (:op data)
                  event-type (:t data)]
