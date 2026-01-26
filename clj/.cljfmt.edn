@@ -1,0 +1,34 @@
+{:paths ["src" "test"]
+ :indentation? true
+ :remove-surrounding-whitespace? true
+ :remove-trailing-whitespace? true
+ :remove-consecutive-blank-lines? true
+ :insert-missing-whitespace? true
+ :align-associative? false
+ :sort-ns-references? true
+ :indents {defn [[:inner 0]]
+           defn- [[:inner 0]]
+           fn [[:inner 0]]
+           let [[:block 1]]
+           when [[:block 1]]
+           when-let [[:block 1]]
+           when-not [[:block 1]]
+           if [[:block 1]]
+           if-let [[:block 1]]
+           if-not [[:block 1]]
+           cond [[:block 0]]
+           case [[:block 1]]
+           try [[:block 0]]
+           catch [[:block 2]]
+           finally [[:block 0]]
+           doseq [[:block 1]]
+           for [[:block 1]]
+           loop [[:block 1]]
+           binding [[:block 1]]
+           with-open [[:block 1]]
+           go [[:block 0]]
+           go-loop [[:block 1]]
+           thread [[:block 0]]
+           testing [[:block 1]]
+           deftest [[:inner 0]]
+           are [[:block 2]]}}

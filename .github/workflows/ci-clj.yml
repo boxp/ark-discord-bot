@@ -1,0 +1,72 @@
+name: Clojure CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'clj/**'
+      - '.github/workflows/ci-clj.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'clj/**'
+      - '.github/workflows/ci-clj.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Babashka
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          bb: latest
+
+      - name: Install clj-kondo
+        run: |
+          curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo
+          chmod +x install-clj-kondo
+          sudo ./install-clj-kondo
+
+      - name: Install cljfmt
+        run: |
+          curl -sLO https://github.com/weavejester/cljfmt/releases/download/0.12.0/cljfmt-0.12.0-linux-amd64.zip
+          unzip cljfmt-0.12.0-linux-amd64.zip
+          sudo mv cljfmt /usr/local/bin/
+
+      - name: Check formatting
+        working-directory: clj
+        run: bb format:check
+
+      - name: Run linter
+        working-directory: clj
+        run: bb lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Babashka
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          bb: latest
+
+      - name: Run tests
+        working-directory: clj
+        run: bb test
+
+  docker:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        working-directory: clj
+        run: docker build -t ark-discord-bot-clj:${{ github.sha }} .
