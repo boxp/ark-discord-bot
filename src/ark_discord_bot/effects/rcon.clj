@@ -1,4 +1,4 @@
-(ns ark-discord-bot.rcon.client
+(ns ark-discord-bot.effects.rcon
     "RCON client for ARK server communication."
     (:require [ark-discord-bot.rcon.protocol :as protocol]
               [clojure.string :as str])
@@ -74,5 +74,3 @@
     []
     (->> (str/split-lines response)
          (keep parse-player-line))))
-
-;; Run tests when loaded

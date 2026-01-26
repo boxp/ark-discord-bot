@@ -1,6 +1,6 @@
-(ns ark-discord-bot.kubernetes.client-test
+(ns ark-discord-bot.effects.kubernetes-test
     "Tests for Kubernetes client."
-    (:require [ark-discord-bot.kubernetes.client :as k8s]
+    (:require [ark-discord-bot.effects.kubernetes :as k8s]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-create-client
@@ -52,4 +52,4 @@
                  (ex-info "error" {:body "not found"}))))))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.kubernetes.client-test)
+(clojure.test/run-tests 'ark-discord-bot.effects.kubernetes-test)

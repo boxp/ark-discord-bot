@@ -1,4 +1,4 @@
-(ns ark-discord-bot.discord.commands
+(ns ark-discord-bot.core.commands
     "Discord command handlers for !ark commands."
     (:require [clojure.string :as str]))
 

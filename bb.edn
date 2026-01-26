@@ -55,8 +55,8 @@
   ;; Run application
   start {:doc "Run the Discord bot"
          :task (do
-                 (load-file "src/ark_discord_bot/core.clj")
-                 ((resolve 'ark-discord-bot.core/-main)))}
+                 (load-file "src/ark_discord_bot/main.clj")
+                 ((resolve 'ark-discord-bot.main/-main)))}
 
   ;; Docker build
   docker:build {:doc "Build Docker image"

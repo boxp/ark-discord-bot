@@ -1,4 +1,4 @@
-(ns ark-discord-bot.kubernetes.client
+(ns ark-discord-bot.effects.kubernetes
     "Kubernetes API client for managing ARK server deployments."
     (:require [babashka.fs :as fs]
               [babashka.http-client :as http]

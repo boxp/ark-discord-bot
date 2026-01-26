@@ -1,6 +1,6 @@
-(ns ark-discord-bot.server.monitor-test
+(ns ark-discord-bot.core.monitor-test
     "Tests for server monitor with debounce logic."
-    (:require [ark-discord-bot.server.monitor :as monitor]
+    (:require [ark-discord-bot.core.monitor :as monitor]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-create-state
@@ -53,4 +53,4 @@
       (is (= 0 (:failure-count state))))))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.server.monitor-test)
+(clojure.test/run-tests 'ark-discord-bot.core.monitor-test)

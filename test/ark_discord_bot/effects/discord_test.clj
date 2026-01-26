@@ -1,6 +1,6 @@
-(ns ark-discord-bot.discord.client-test
+(ns ark-discord-bot.effects.discord-test
     "Tests for Discord HTTP client."
-    (:require [ark-discord-bot.discord.client :as discord]
+    (:require [ark-discord-bot.effects.discord :as discord]
               [clojure.string :as str]
               [clojure.test :refer [deftest is testing]]))
 
@@ -75,4 +75,4 @@
         (is (every? :disabled buttons))))))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.discord.client-test)
+(clojure.test/run-tests 'ark-discord-bot.effects.discord-test)

@@ -1,6 +1,6 @@
-(ns ark-discord-bot.core-test
+(ns ark-discord-bot.main-test
     "Tests for core application logic."
-    (:require [ark-discord-bot.discord.gateway :as gateway]
+    (:require [ark-discord-bot.effects.gateway :as gateway]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-interaction-parsing-for-restart
@@ -33,4 +33,4 @@
     (is true "Restart flow is documented")))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.core-test)
+(clojure.test/run-tests 'ark-discord-bot.main-test)

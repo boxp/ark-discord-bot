@@ -13,6 +13,9 @@
    :monitor {:last-status nil
              :failure-count 0
              :failure-threshold (:failure-threshold config)}
+   :system {:shutdown? false
+            :ws-client nil
+            :monitor-future nil}
    :config config})
 
 (defn init-state!
@@ -101,6 +104,38 @@
   "Get failure threshold."
   []
   (get-in @app-state [:monitor :failure-threshold]))
+
+;; System state accessors
+
+(defn system-shutdown?
+  "Check if system is shutting down."
+  []
+  (get-in @app-state [:system :shutdown?]))
+
+(defn shutdown!
+  "Signal system shutdown."
+  []
+  (swap! app-state assoc-in [:system :shutdown?] true))
+
+(defn get-ws-client
+  "Get WebSocket client reference."
+  []
+  (get-in @app-state [:system :ws-client]))
+
+(defn set-ws-client!
+  "Set WebSocket client reference."
+  [ws-client]
+  (swap! app-state assoc-in [:system :ws-client] ws-client))
+
+(defn get-monitor-future
+  "Get monitor loop future reference."
+  []
+  (get-in @app-state [:system :monitor-future]))
+
+(defn set-monitor-future!
+  "Set monitor loop future reference."
+  [monitor-future]
+  (swap! app-state assoc-in [:system :monitor-future] monitor-future))
 
 ;; Config accessors
 

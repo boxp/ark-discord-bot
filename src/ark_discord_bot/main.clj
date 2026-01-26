@@ -1,14 +1,14 @@
-(ns ark-discord-bot.core
+(ns ark-discord-bot.main
     "Main entry point for the ARK Discord Bot.
    Orchestrates all components and manages lifecycle."
     (:require [ark-discord-bot.config :as config]
-              [ark-discord-bot.discord.client :as discord]
-              [ark-discord-bot.discord.commands :as commands]
-              [ark-discord-bot.discord.gateway :as gateway]
-              [ark-discord-bot.kubernetes.client :as k8s]
-              [ark-discord-bot.rcon.client :as rcon]
-              [ark-discord-bot.server.monitor :as monitor]
-              [ark-discord-bot.server.status-checker :as checker]
+              [ark-discord-bot.core.commands :as commands]
+              [ark-discord-bot.core.monitor :as monitor]
+              [ark-discord-bot.core.status :as status]
+              [ark-discord-bot.effects.discord :as discord]
+              [ark-discord-bot.effects.gateway :as gateway]
+              [ark-discord-bot.effects.kubernetes :as k8s]
+              [ark-discord-bot.effects.rcon :as rcon]
               [ark-discord-bot.state :as state]))
 
 (defn- log
@@ -41,7 +41,7 @@
                        {:error (.getMessage e)}))
         rcon-result (when (:available? k8s-result)
                       (check-rcon-status rcon-client (:rcon-timeout config)))]
-    (checker/determine-status k8s-result rcon-result)))
+    (status/determine-status k8s-result rcon-result)))
 
 (defn- handle-command
   "Handle a parsed command."
@@ -54,7 +54,7 @@
     (let [result (check-status k8s-client rcon-client config)]
       (discord/send-status-message discord-client
                                    (:status result)
-                                   (checker/format-status-message result)
+                                   (status/format-status-message result)
                                    channel-id))
 
     :players
@@ -122,32 +122,35 @@
               (log :error (str "Command error: " (.getMessage e))))))))))
 
 (defn- start-monitor-loop
-  "Start background monitoring loop."
+  "Start background monitoring loop.
+   Returns the future for the monitor loop."
   [discord-client k8s-client rcon-client config]
   (future
    (loop []
-     (Thread/sleep (:monitor-interval config))
-     (try
-       (let [result (check-status k8s-client rcon-client config)
-             new-status (:status result)
-             monitor-state (state/get-monitor-state)
-             is-failure? (not= :running new-status)
-             ;; Calculate projected failure count after update
-             projected-count (if is-failure?
-                               (inc (:failure-count monitor-state))
-                               0)
-             notify? (monitor/should-notify-with-debounce?
-                      monitor-state new-status projected-count)]
-         (when notify?
-           (log :info (str "Status changed to: " new-status))
-           (discord/send-status-message discord-client
-                                        new-status
-                                        (checker/format-status-message result)))
-         (state/update-monitor-state! new-status))
-       (catch Exception e
-         (when (not (k8s/is-transient-error? e))
-           (log :error (str "Monitor error: " (.getMessage e))))))
-     (recur))))
+     (when-not (state/system-shutdown?)
+       (Thread/sleep (:monitor-interval config))
+       (when-not (state/system-shutdown?)
+         (try
+           (let [result (check-status k8s-client rcon-client config)
+                 new-status (:status result)
+                 monitor-state (state/get-monitor-state)
+                 is-failure? (not= :running new-status)
+                 ;; Calculate projected failure count after update
+                 projected-count (if is-failure?
+                                   (inc (:failure-count monitor-state))
+                                   0)
+                 notify? (monitor/should-notify-with-debounce?
+                          monitor-state new-status projected-count)]
+             (when notify?
+               (log :info (str "Status changed to: " new-status))
+               (discord/send-status-message discord-client
+                                            new-status
+                                            (status/format-status-message result)))
+             (state/update-monitor-state! new-status))
+           (catch Exception e
+             (when (not (k8s/is-transient-error? e))
+               (log :error (str "Monitor error: " (.getMessage e)))))))
+       (recur)))))
 
 (defn- create-interaction-handler
   "Create interaction handler for button clicks."
@@ -167,10 +170,28 @@
       (log :info (str "Connected to Discord as: " username))
       (log :info "Bot is now ready to receive messages"))))
 
+(defn- shutdown-hook
+  "Shutdown hook to cleanup resources."
+  []
+  (log :info "Shutting down...")
+  (state/shutdown!)
+  ;; Wait for monitor loop to stop
+  (when-let [f (state/get-monitor-future)]
+    (future-cancel f))
+  ;; Close WebSocket connection
+  (when-let [ws (state/get-ws-client)]
+    (try
+      (.close ws)
+      (catch Exception _)))
+  (log :info "Shutdown complete."))
+
 (defn -main
   "Application entry point."
   [& _args]
   (log :info "ARK Discord Bot starting...")
+  ;; Register shutdown hook
+  (.addShutdownHook (Runtime/getRuntime)
+                    (Thread. shutdown-hook))
   (let [config (config/validate-config (config/load-config))
         _ (state/init-state! config)
         discord-client (discord/create-client (:discord-token config)
@@ -186,14 +207,19 @@
         interaction-handler (create-interaction-handler (:discord-token config)
                                                         k8s-client)]
     (log :info "Starting monitor loop...")
-    (start-monitor-loop discord-client k8s-client rcon-client config)
+    (let [monitor-future (start-monitor-loop discord-client k8s-client
+                                             rcon-client config)]
+      (state/set-monitor-future! monitor-future))
     (log :info "Connecting to Discord Gateway...")
-    (gateway/connect (:discord-token config)
-                     msg-handler
-                     interaction-handler
-                     (create-ready-handler))
+    (let [ws-client (gateway/connect (:discord-token config)
+                                     msg-handler
+                                     interaction-handler
+                                     (create-ready-handler))]
+      (state/set-ws-client! ws-client))
     (log :info "Bot is running. Press Ctrl+C to stop.")
-    @(promise)))
+    ;; Wait for shutdown signal
+    (while (not (state/system-shutdown?))
+           (Thread/sleep 1000))))
 
 ;; Entry point for bb start
 (when (= *file* (System/getProperty "babashka.file"))
