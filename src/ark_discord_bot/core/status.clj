@@ -1,4 +1,4 @@
-(ns ark-discord-bot.server.status-checker
+(ns ark-discord-bot.core.status
     "Server status checker with 2-stage validation.
    Stage 1: Kubernetes deployment check
    Stage 2: RCON connectivity validation")

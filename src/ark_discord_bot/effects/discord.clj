@@ -1,4 +1,4 @@
-(ns ark-discord-bot.discord.client
+(ns ark-discord-bot.effects.discord
     "Discord HTTP API client for sending messages and embeds."
     (:require [babashka.http-client :as http]
               [cheshire.core :as json]))

@@ -1,6 +1,6 @@
-(ns ark-discord-bot.discord.commands-test
+(ns ark-discord-bot.core.commands-test
     "Tests for Discord command handlers."
-    (:require [ark-discord-bot.discord.commands :as commands]
+    (:require [ark-discord-bot.core.commands :as commands]
               [clojure.string :as str]
               [clojure.test :refer [deftest is testing]]))
 
@@ -55,4 +55,4 @@
       (is (str/includes? result "オンラインのプレイヤーはいません")))))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.discord.commands-test)
+(clojure.test/run-tests 'ark-discord-bot.core.commands-test)

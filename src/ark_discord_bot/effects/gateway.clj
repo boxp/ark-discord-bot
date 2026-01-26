@@ -1,4 +1,4 @@
-(ns ark-discord-bot.discord.gateway
+(ns ark-discord-bot.effects.gateway
     "Discord Gateway WebSocket client for receiving events."
     (:require [ark-discord-bot.state :as state]
               [babashka.http-client.websocket :as ws]
@@ -114,7 +114,8 @@
   "Connect to Discord Gateway.
    on-message is called with MESSAGE_CREATE data.
    on-interaction is called with INTERACTION_CREATE data.
-   on-ready is called with READY event data (optional)."
+   on-ready is called with READY event data (optional).
+   Returns the WebSocket client."
   ([token on-message]
    (connect token on-message nil nil))
   ([token on-message on-interaction]

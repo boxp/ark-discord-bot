@@ -10,7 +10,8 @@
       (is (map? s))
       (is (contains? s :gateway))
       (is (contains? s :monitor))
-      (is (contains? s :config)))))
+      (is (contains? s :config))
+      (is (contains? s :system)))))
 
 (deftest test-gateway-state
   (testing "gateway state is initialized correctly"
@@ -27,6 +28,13 @@
       (is (nil? (:last-status mon)))
       (is (= 0 (:failure-count mon)))
       (is (= 3 (:failure-threshold mon))))))
+
+(deftest test-system-state
+  (testing "system state is initialized correctly"
+    (state/init-state! {:failure-threshold 3})
+    (is (false? (state/system-shutdown?)))
+    (is (nil? (state/get-ws-client)))
+    (is (nil? (state/get-monitor-future)))))
 
 (deftest test-update-gateway-seq
   (testing "update-gateway-seq! updates sequence number"
@@ -94,6 +102,31 @@
       (is (nil? (:seq gw)))
       (is (true? (:running? gw)))
       (is (= "" (:msg-buffer gw))))))
+
+(deftest test-shutdown
+  (testing "shutdown! sets shutdown flag"
+    (state/init-state! {:failure-threshold 3})
+    (is (false? (state/system-shutdown?)))
+    (state/shutdown!)
+    (is (true? (state/system-shutdown?)))))
+
+(deftest test-set-ws-client
+  (testing "set-ws-client! stores ws-client"
+    (state/init-state! {:failure-threshold 3})
+    (is (nil? (state/get-ws-client)))
+    (let [mock-ws :mock-websocket]
+      (state/set-ws-client! mock-ws)
+      (is (= mock-ws (state/get-ws-client))))))
+
+(deftest test-set-monitor-future
+  (testing "set-monitor-future! stores monitor-future"
+    (state/init-state! {:failure-threshold 3})
+    (is (nil? (state/get-monitor-future)))
+    (let [mock-future (future :mock)]
+      (state/set-monitor-future! mock-future)
+      (is (= mock-future (state/get-monitor-future)))
+      ;; Clean up
+      (future-cancel mock-future))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.state-test)

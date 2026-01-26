@@ -1,4 +1,4 @@
-(ns ark-discord-bot.server.monitor
+(ns ark-discord-bot.core.monitor
     "Server monitor with debounce logic for notifications.
    Implements failure threshold to avoid notification spam.")
 

@@ -1,6 +1,6 @@
-(ns ark-discord-bot.discord.gateway-test
+(ns ark-discord-bot.effects.gateway-test
     "Tests for Discord Gateway."
-    (:require [ark-discord-bot.discord.gateway :as gateway]
+    (:require [ark-discord-bot.effects.gateway :as gateway]
               [ark-discord-bot.state :as state]
               [clojure.test :refer [deftest is testing]]))
 
@@ -68,4 +68,4 @@
     (is (= "UNKNOWN(99)" (gateway/opcode-name 99)))))
 
 ;; Run tests when loaded
-(clojure.test/run-tests 'ark-discord-bot.discord.gateway-test)
+(clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
