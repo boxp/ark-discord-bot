@@ -23,29 +23,37 @@
      default)))
 
 (def default-config
-     "Default configuration values."
-     {:rcon-port 27020
+     "Default configuration values (matching Python implementation)."
+     {:k8s-namespace "ark-survival-ascended"
+      :k8s-deployment "ark-server"
+      :k8s-service "ark-server-service"
+      :rcon-host "192.168.10.29"
+      :rcon-port 27020
       :rcon-timeout 10000
-      :monitor-interval 60000
+      :monitor-interval 30000  ; 30 seconds in milliseconds
       :failure-threshold 3
       :log-level "INFO"})
 
 (defn load-config
-  "Load configuration from environment variables."
+  "Load configuration from environment variables.
+   Environment variable names match the Python implementation."
   []
-  {:discord-token (get-required-env "DISCORD_TOKEN")
+  {:discord-token (get-required-env "DISCORD_BOT_TOKEN")
    :discord-channel-id (get-required-env "DISCORD_CHANNEL_ID")
-   :k8s-namespace (get-env "K8S_NAMESPACE" "default")
-   :k8s-deployment (get-required-env "K8S_DEPLOYMENT_NAME")
-   :k8s-service (get-required-env "K8S_SERVICE_NAME")
-   :rcon-host (get-env "RCON_HOST" "localhost")
+   :k8s-namespace (get-env "KUBERNETES_NAMESPACE"
+                           (:k8s-namespace default-config))
+   :k8s-deployment (get-env "KUBERNETES_DEPLOYMENT_NAME"
+                            (:k8s-deployment default-config))
+   :k8s-service (get-env "KUBERNETES_SERVICE_NAME"
+                         (:k8s-service default-config))
+   :rcon-host (get-env "RCON_HOST" (:rcon-host default-config))
    :rcon-port (parse-int (get-env "RCON_PORT")
                          (:rcon-port default-config))
    :rcon-password (get-required-env "RCON_PASSWORD")
    :rcon-timeout (parse-int (get-env "RCON_TIMEOUT")
                             (:rcon-timeout default-config))
-   :monitor-interval (parse-int (get-env "MONITOR_INTERVAL")
-                                (:monitor-interval default-config))
+   :monitor-interval (* 1000 (parse-int (get-env "MONITORING_INTERVAL")
+                                        (/ (:monitor-interval default-config) 1000)))
    :failure-threshold (parse-int (get-env "FAILURE_THRESHOLD")
                                  (:failure-threshold default-config))
    :log-level (get-env "LOG_LEVEL" (:log-level default-config))})
