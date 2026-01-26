@@ -1,30 +1,25 @@
-FROM python:3.14-slim@sha256:2751cbe93751f0147bc1584be957c6dd4c5f977c3d4e0396b56456a9fd4ed137
+# ARK Discord Bot - Babashka/Clojure
+FROM babashka/babashka:latest
 
-# Set working directory
+# Create non-root user (Ubuntu-based image uses groupadd/useradd)
+RUN groupadd --gid 10000 appgroup && \
+    useradd --uid 10000 --gid 10000 --no-create-home --shell /bin/false appuser
+
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+# Copy source files (deps.edn is for Clojure CLI, not needed for babashka)
+COPY bb.edn ./
 COPY src/ ./src/
-COPY __main__.py .
 
-# Create non-root user
-RUN useradd -m -u 10000 botuser && chown -R botuser:botuser /app
-USER botuser
+# Set ownership
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import asyncio; print('Bot is running')" || exit 1
+    CMD bb -e "(println :ok)" || exit 1
 
 # Run the bot
-CMD ["python", "__main__.py"]
+CMD ["bb", "start"]
