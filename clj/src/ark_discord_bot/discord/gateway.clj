@@ -130,27 +130,31 @@
            (println "[info] [gateway] WebSocket connection established"))
          :on-message
          (fn [_ws msg _last]
-           (let [data (json/parse-string msg true)
-                 op (:op data)
-                 event-type (:t data)]
-             ;; Log received opcode for debugging
-             (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                           (when event-type (str ", event=" event-type))))
-             (cond
-               (= op (:hello opcodes))
-               (handle-hello _ws token (:d data) seq-atom running-atom)
+           (try
+             (let [data (json/parse-string (str msg) true)
+                   op (:op data)
+                   event-type (:t data)]
+               ;; Log received opcode for debugging
+               (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                             (when event-type (str ", event=" event-type))))
+               (cond
+                 (= op (:hello opcodes))
+                 (handle-hello _ws token (:d data) seq-atom running-atom)
 
-               (= op (:dispatch opcodes))
-               (handle-dispatch data event-type on-message
-                                on-interaction on-ready seq-atom)
+                 (= op (:dispatch opcodes))
+                 (handle-dispatch data event-type on-message
+                                  on-interaction on-ready seq-atom)
 
-               (= op (:invalid-session opcodes))
-               (do
-                (println "[error] [gateway] Invalid session - check bot token")
-                (reset! running-atom false))
+                 (= op (:invalid-session opcodes))
+                 (do
+                  (println "[error] [gateway] Invalid session - check bot token")
+                  (reset! running-atom false))
 
-               (= op (:reconnect opcodes))
-               (println "[warn] [gateway] Server requested reconnect"))))
+                 (= op (:reconnect opcodes))
+                 (println "[warn] [gateway] Server requested reconnect")))
+             (catch Exception e
+               (println (str "[error] [gateway] on-message error: "
+                             (.getMessage e))))))
          :on-close (create-close-handler running-atom)
          :on-error (create-error-handler)})
        (catch Exception e
