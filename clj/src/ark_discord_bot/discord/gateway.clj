@@ -11,8 +11,24 @@
       :identify 2
       :resume 6
       :reconnect 7
+      :invalid-session 9
       :hello 10
       :heartbeat-ack 11})
+
+(def ^:private opcode-names
+     {0 "DISPATCH"
+      1 "HEARTBEAT"
+      2 "IDENTIFY"
+      6 "RESUME"
+      7 "RECONNECT"
+      9 "INVALID_SESSION"
+      10 "HELLO"
+      11 "HEARTBEAT_ACK"})
+
+(defn opcode-name
+  "Get human-readable name for opcode."
+  [op]
+  (get opcode-names op (str "UNKNOWN(" op ")")))
 
 (defn- build-identify
   "Build identify payload."
@@ -117,13 +133,24 @@
            (let [data (json/parse-string msg true)
                  op (:op data)
                  event-type (:t data)]
+             ;; Log received opcode for debugging
+             (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                           (when event-type (str ", event=" event-type))))
              (cond
                (= op (:hello opcodes))
                (handle-hello _ws token (:d data) seq-atom running-atom)
 
                (= op (:dispatch opcodes))
                (handle-dispatch data event-type on-message
-                                on-interaction on-ready seq-atom))))
+                                on-interaction on-ready seq-atom)
+
+               (= op (:invalid-session opcodes))
+               (do
+                (println "[error] [gateway] Invalid session - check bot token")
+                (reset! running-atom false))
+
+               (= op (:reconnect opcodes))
+               (println "[warn] [gateway] Server requested reconnect"))))
          :on-close (create-close-handler running-atom)
          :on-error (create-error-handler)})
        (catch Exception e
