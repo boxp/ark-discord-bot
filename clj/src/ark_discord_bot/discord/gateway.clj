@@ -35,43 +35,71 @@
 
 (defn- start-heartbeat
   "Start heartbeat loop in background."
-  [ws-client interval-ms seq-atom]
+  [ws-client interval-ms seq-atom running-atom]
   (future
    (loop []
      (Thread/sleep interval-ms)
-     (when (ws/open? ws-client)
-       (send-json ws-client (build-heartbeat @seq-atom))
+     (when @running-atom
+       (try
+         (send-json ws-client (build-heartbeat @seq-atom))
+         (catch Exception _ (reset! running-atom false)))
        (recur)))))
 
 (defn- handle-hello
   "Handle HELLO opcode - start heartbeat and identify."
-  [ws-client token data seq-atom]
+  [ws-client token data seq-atom running-atom]
   (let [interval (:heartbeat_interval data)]
-    (start-heartbeat ws-client interval seq-atom)
+    (start-heartbeat ws-client interval seq-atom running-atom)
     (send-json ws-client (build-identify token))))
 
 (defn- handle-dispatch
   "Handle DISPATCH opcode - process events."
-  [data event-type on-message seq-atom]
+  [data event-type on-message on-interaction seq-atom]
   (reset! seq-atom (:s data))
-  (when (and (= event-type "MESSAGE_CREATE") on-message)
-    (on-message (:d data))))
+  (case event-type
+    "MESSAGE_CREATE" (when on-message (on-message (:d data)))
+    "INTERACTION_CREATE" (when on-interaction (on-interaction (:d data)))
+    nil))
+
+(defn parse-interaction
+  "Parse interaction data from INTERACTION_CREATE event.
+   Returns {:action :restart-confirm|:restart-cancel
+            :interaction-id :interaction-token} or nil."
+  [data]
+  (when (= 3 (:type data))  ;; MESSAGE_COMPONENT type
+    (let [custom-id (get-in data [:data :custom_id])]
+      (case custom-id
+        "restart_confirm" {:action :restart-confirm
+                           :interaction-id (:id data)
+                           :interaction-token (:token data)}
+        "restart_cancel" {:action :restart-cancel
+                          :interaction-id (:id data)
+                          :interaction-token (:token data)}
+        nil))))
 
 (defn connect
   "Connect to Discord Gateway.
-   on-message is called with message data when MESSAGE_CREATE received."
-  [token on-message]
-  (let [seq-atom (atom nil)]
-    (ws/websocket
-     {:uri gateway-url
-      :on-message
-      (fn [_ws msg]
-        (let [data (json/parse-string msg true)
-              op (:op data)
-              event-type (:t data)]
-          (cond
-            (= op (:hello opcodes))
-            (handle-hello _ws token (:d data) seq-atom)
+   on-message is called with MESSAGE_CREATE data.
+   on-interaction is called with INTERACTION_CREATE data."
+  ([token on-message]
+   (connect token on-message nil))
+  ([token on-message on-interaction]
+   (let [seq-atom (atom nil)
+         running-atom (atom true)]
+     (ws/websocket
+      {:uri gateway-url
+       :on-message
+       (fn [_ws msg]
+         (let [data (json/parse-string msg true)
+               op (:op data)
+               event-type (:t data)]
+           (cond
+             (= op (:hello opcodes))
+             (handle-hello _ws token (:d data) seq-atom running-atom)
 
-            (= op (:dispatch opcodes))
-            (handle-dispatch data event-type on-message seq-atom))))})))
+             (= op (:dispatch opcodes))
+             (handle-dispatch data event-type on-message
+                              on-interaction seq-atom))))
+       :on-close
+       (fn [_ws _code _reason]
+         (reset! running-atom false))}))))

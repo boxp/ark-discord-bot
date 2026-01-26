@@ -66,3 +66,53 @@
                            (str (format-status status) "\n\n" details)
                            (if (= :running status) :success :warning))]
     (send-embed client embed)))
+
+(defn build-restart-confirmation
+  "Build restart confirmation embed with buttons."
+  []
+  (let [embed {:title "⚠️ ARKサーバー再起動の確認"
+               :description (str "本当にARKサーバーを再起動しますか？\n\n"
+                                 "⚠️ **注意**: 再起動中はプレイヤーが切断され、"
+                                 "サーバーが再度利用可能になるまで数分かかります。")
+               :color 0xFF9900}
+        components [{:type 1
+                     :components [{:type 2
+                                   :style 4
+                                   :label "再起動する"
+                                   :emoji {:name "🔄"}
+                                   :custom_id "restart_confirm"}
+                                  {:type 2
+                                   :style 2
+                                   :label "キャンセル"
+                                   :emoji {:name "❌"}
+                                   :custom_id "restart_cancel"}]}]]
+    {:embed embed :components components}))
+
+(defn build-interaction-response
+  "Build interaction response payload."
+  [response-type content]
+  {:type response-type
+   :data {:content content}})
+
+(defn build-interaction-update
+  "Build interaction update message response."
+  [content]
+  (build-interaction-response 7 content))
+
+(defn send-restart-confirmation
+  "Send restart confirmation with buttons."
+  [client]
+  (let [{:keys [embed components]} (build-restart-confirmation)]
+    (send-request client :post
+                  (str "/channels/" (:channel-id client) "/messages")
+                  {:embeds [embed] :components components})))
+
+(defn respond-to-interaction
+  "Respond to a Discord interaction.
+   Note: Bot token not needed for interaction responses."
+  [_token interaction-id interaction-token response]
+  (let [url (str api-base "/interactions/" interaction-id "/"
+                 interaction-token "/callback")]
+    (http/post url {:headers {"Content-Type" "application/json"}
+                    :body (json/generate-string response)
+                    :throw false})))

@@ -56,11 +56,36 @@
       (discord/send-message discord-client msg))
 
     :restart
-    (do
-     (k8s/restart-deployment k8s-client)
-     (discord/send-message discord-client (commands/format-restart-started)))
+    (discord/send-restart-confirmation discord-client)
 
     nil))
+
+(defn- handle-interaction
+  "Handle Discord interaction (button clicks, etc.)."
+  [interaction-data token k8s-client]
+  (when-let [interaction (gateway/parse-interaction interaction-data)]
+    (let [{:keys [action interaction-id interaction-token]} interaction]
+      (log :info (str "Interaction: " action))
+      (case action
+        :restart-confirm
+        (do
+         (discord/respond-to-interaction
+          token interaction-id interaction-token
+          (discord/build-interaction-update
+           "🔄 ARKサーバーの再起動を開始しています..."))
+         (try
+           (k8s/restart-deployment k8s-client)
+           (log :info "Server restart initiated successfully")
+           (catch Exception e
+             (log :error (str "Failed to restart: " (.getMessage e))))))
+
+        :restart-cancel
+        (discord/respond-to-interaction
+         token interaction-id interaction-token
+         (discord/build-interaction-update
+          "❌ ARKサーバーの再起動がキャンセルされました。"))
+
+        nil))))
 
 (defn- create-message-handler
   "Create message handler for gateway events."
@@ -99,6 +124,15 @@
            (log :error (str "Monitor error: " (.getMessage e))))))
      (recur))))
 
+(defn- create-interaction-handler
+  "Create interaction handler for button clicks."
+  [token k8s-client]
+  (fn [interaction-data]
+    (try
+      (handle-interaction interaction-data token k8s-client)
+      (catch Exception e
+        (log :error (str "Interaction error: " (.getMessage e)))))))
+
 (defn -main
   "Application entry point."
   [& _args]
@@ -114,11 +148,13 @@
                                         (:rcon-password config))
         monitor-state (atom (monitor/create-state (:failure-threshold config)))
         msg-handler (create-message-handler discord-client k8s-client
-                                            rcon-client config)]
+                                            rcon-client config)
+        interaction-handler (create-interaction-handler (:discord-token config)
+                                                        k8s-client)]
     (log :info "Starting monitor loop...")
     (start-monitor-loop discord-client k8s-client rcon-client config monitor-state)
     (log :info "Connecting to Discord Gateway...")
-    (gateway/connect (:discord-token config) msg-handler)
+    (gateway/connect (:discord-token config) msg-handler interaction-handler)
     (log :info "Bot is running. Press Ctrl+C to stop.")
     @(promise)))
 
