@@ -7,14 +7,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    volumes:
-      - ./logs:/app/logs
     networks:
       - ark-bot-network
     depends_on:
       - ark-discord-bot-redis
     healthcheck:
-      test: ["CMD", "python", "-c", "import asyncio; print('Bot is running')"]
+      test: ["CMD", "bb", "-e", "(println :ok)"]
       interval: 30s
       timeout: 10s
       retries: 3
