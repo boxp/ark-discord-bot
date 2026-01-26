@@ -49,3 +49,28 @@
   "Reset failure count to zero."
   [state]
   (assoc state :failure-count 0))
+
+(defn format-notification
+  "Format status change notification message."
+  [current-status previous-status]
+  (cond
+    ;; Recovery to running
+    (and (= current-status :running)
+         (not= previous-status :running))
+    "🟢 ARKサーバーが接続準備完了しました！ 🦕"
+
+    ;; Starting from not-ready
+    (and (= current-status :starting)
+         (= previous-status :not-ready))
+    "🟡 ARKサーバーポッドが稼働中、ゲームサーバー起動中..."
+
+    ;; Degraded from running
+    (and (#{:not-ready :starting} current-status)
+         (= previous-status :running))
+    "🟡 ARKサーバーが再起動中または準備未完了です..."
+
+    ;; Error state
+    (= current-status :error)
+    "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
+
+    :else nil))

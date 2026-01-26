@@ -27,12 +27,12 @@
 (deftest test-format-status-running
   (testing "format-status shows running correctly"
     (let [result (discord/format-status :running)]
-      (is (str/includes? result "Running")))))
+      (is (str/includes? result "稼働中")))))
 
 (deftest test-format-status-starting
   (testing "format-status shows starting correctly"
     (let [result (discord/format-status :starting)]
-      (is (str/includes? result "Starting")))))
+      (is (str/includes? result "起動中")))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.discord.client-test)

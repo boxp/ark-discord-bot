@@ -52,7 +52,7 @@
 (deftest test-format-players-empty
   (testing "format-players shows no players"
     (let [result (commands/format-players [])]
-      (is (str/includes? result "No players")))))
+      (is (str/includes? result "オンラインのプレイヤーはいません")))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.discord.commands-test)

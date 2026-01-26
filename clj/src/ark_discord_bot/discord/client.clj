@@ -27,11 +27,11 @@
   "Format server status for display."
   [status]
   (case status
-    :running "🟢 Running"
-    :starting "🟡 Starting"
-    :not-ready "🟡 Not Ready"
-    :error "🔴 Error"
-    (str "❓ " (name status))))
+    :running "🟢 ARKサーバーは稼働中で接続準備完了です！"
+    :starting "🟡 ARKサーバーポッドは稼働中ですが、ゲームサーバーはまだ起動中です。もう少しお待ちください..."
+    :not-ready "🟡 ARKサーバーは起動中または準備未完了です..."
+    :error "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
+    (str "❓ 不明なサーバーステータス: " (name status))))
 
 (defn- send-request
   "Send HTTP request to Discord API."

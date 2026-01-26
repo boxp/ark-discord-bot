@@ -22,8 +22,8 @@
   "Format Kubernetes info for display."
   [k8s]
   (if (:error k8s)
-    (str "K8s: Error - " (:error k8s))
-    (str "Pods: " (:ready k8s 0) " ready")))
+    (str "K8s: エラー - " (:error k8s))
+    (str "ポッド: " (:ready k8s 0) " 準備完了")))
 
 (defn- format-rcon-info
   "Format RCON info for display."
@@ -31,9 +31,9 @@
   (if (:connected rcon)
     (let [players (:players rcon [])]
       (if (empty? players)
-        "Players: None online"
-        (str "Players: " (count players) " online")))
-    "RCON: Not connected"))
+        "プレイヤー: オンラインなし"
+        (str "プレイヤー: " (count players) "人がオンライン")))
+    "RCON: 未接続"))
 
 (defn format-status-message
   "Format complete status message for display."
