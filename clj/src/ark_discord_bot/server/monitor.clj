@@ -17,17 +17,15 @@
 
 (defn should-notify-with-debounce?
   "Check if notification should be sent with debounce.
-   For failures, waits until threshold is reached."
+   For failures, waits until threshold is reached exactly once."
   [state new-status failure-count]
   (cond
-    ;; First status ever - always notify
-    (nil? (:last-status state)) true
-    ;; Same status - no notification
-    (= (:last-status state) new-status) false
-    ;; Transitioning to success - immediate notification
-    (= :running new-status) true
-    ;; Transitioning to failure - check threshold
-    :else (>= failure-count (:failure-threshold state))))
+    ;; Transitioning to success - immediate notification on change
+    (= :running new-status)
+    (not= (:last-status state) :running)
+    ;; Failure state (new or continuing) - notify when threshold is hit exactly
+    :else
+    (= failure-count (:failure-threshold state))))
 
 (defn update-state
   "Update monitor state with new status."

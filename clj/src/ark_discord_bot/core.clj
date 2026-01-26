@@ -18,13 +18,18 @@
 (defn- check-rcon-status
   "Check RCON connectivity and get player list."
   [rcon-client timeout-ms]
-  (try
-    (let [client (rcon/connect rcon-client timeout-ms)
-          players (rcon/parse-listplayers (rcon/execute client "ListPlayers"))]
-      (rcon/disconnect client)
-      {:connected true :players players})
-    (catch Exception e
-      {:connected false :error (.getMessage e)})))
+  (let [client (atom nil)]
+    (try
+      (reset! client (rcon/connect rcon-client timeout-ms))
+      (let [players (rcon/parse-listplayers (rcon/execute @client "ListPlayers"))]
+        {:connected true :players players})
+      (catch Exception e
+        {:connected false :error (.getMessage e)})
+      (finally
+        (when @client
+          (try
+            (rcon/disconnect @client)
+            (catch Exception _)))))))
 
 (defn- check-status
   "Perform full status check."
@@ -52,7 +57,9 @@
 
     :players
     (let [rcon-result (check-rcon-status rcon-client (:rcon-timeout config))
-          msg (commands/format-players (:players rcon-result []))]
+          msg (if (:connected rcon-result)
+                (commands/format-players (:players rcon-result []))
+                (commands/format-players-error))]
       (discord/send-message discord-client msg))
 
     :restart
@@ -111,8 +118,13 @@
        (let [result (check-status k8s-client rcon-client config)
              new-status (:status result)
              state @state-atom
+             is-failure? (not= :running new-status)
+             ;; Calculate projected failure count after update
+             projected-count (if is-failure?
+                               (inc (:failure-count state))
+                               0)
              notify? (monitor/should-notify-with-debounce?
-                      state new-status (:failure-count state))]
+                      state new-status projected-count)]
          (when notify?
            (log :info (str "Status changed to: " new-status))
            (discord/send-status-message discord-client
