@@ -4,9 +4,6 @@
 .nrepl-port
 *.jar
 
-# Babashka
-.bb/
-
 # Environment
 .env
 
