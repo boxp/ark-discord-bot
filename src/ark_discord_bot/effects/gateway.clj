@@ -51,15 +51,16 @@
   (ws/send! ws-client (json/generate-string payload)))
 
 (defn- start-heartbeat
-  "Start heartbeat loop in background."
+  "Start heartbeat loop in background.
+   Sends first heartbeat immediately per Discord Gateway spec."
   [ws-client interval-ms]
   (future
    (loop []
-     (Thread/sleep interval-ms)
      (when (state/gateway-running?)
        (try
          (send-json ws-client (build-heartbeat (state/get-gateway-seq)))
          (catch Exception _ (state/set-gateway-running! false)))
+       (Thread/sleep interval-ms)
        (recur)))))
 
 (defn- handle-hello
