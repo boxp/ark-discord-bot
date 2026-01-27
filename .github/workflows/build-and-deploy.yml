@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - 'src/**'
-      - 'bb.edn'
+      - 'resources/**'
+      - 'build.clj'
+      - 'deps.edn'
       - 'Dockerfile'
       - '.github/workflows/build-and-deploy.yml'
   pull_request:
@@ -14,7 +16,9 @@ on:
       - main
     paths:
       - 'src/**'
-      - 'bb.edn'
+      - 'resources/**'
+      - 'build.clj'
+      - 'deps.edn'
       - 'Dockerfile'
       - '.github/workflows/build-and-deploy.yml'
 

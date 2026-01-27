@@ -6,7 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
-      - 'bb.edn'
+      - 'build.clj'
       - 'deps.edn'
       - '.github/workflows/ci.yml'
   pull_request:
@@ -14,7 +14,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
-      - 'bb.edn'
+      - 'build.clj'
       - 'deps.edn'
       - '.github/workflows/ci.yml'
 
@@ -24,10 +24,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Babashka
+      - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@12.5
         with:
-          bb: latest
+          cli: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure
+          key: ${{ runner.os }}-clojure-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-
 
       - name: Install clj-kondo
         run: |
@@ -47,23 +58,34 @@ jobs:
           mv cljfmt ~/.local/bin/
 
       - name: Check formatting
-        run: bb format:check
+        run: clojure -M:format-check
 
       - name: Run linter
-        run: bb lint
+        run: clojure -M:lint
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Babashka
+      - name: Setup Clojure
         uses: DeLaGuardo/setup-clojure@12.5
         with:
-          bb: latest
+          cli: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure
+          key: ${{ runner.os }}-clojure-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-
 
       - name: Run tests
-        run: bb test
+        run: clojure -M:test
 
   docker:
     needs: [lint, test]
