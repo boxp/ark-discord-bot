@@ -25,5 +25,22 @@
     "methods": [
       {"name": "<init>", "parameterTypes": ["java.io.OutputStream"]}
     ]
+  },
+  {
+    "name": "java.nio.ByteBuffer",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.nio.HeapByteBuffer",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.nio.ByteOrder",
+    "allPublicFields": true
+  },
+  {
+    "name": "java.lang.String",
+    "allPublicMethods": true,
+    "allPublicConstructors": true
   }
 ]
