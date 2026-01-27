@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "name": "java.lang.Thread",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.Runnable"]}
+    ]
+  }
+]
