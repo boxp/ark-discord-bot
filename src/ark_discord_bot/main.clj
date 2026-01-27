@@ -9,7 +9,8 @@
               [ark-discord-bot.effects.gateway :as gateway]
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
-              [ark-discord-bot.state :as state]))
+              [ark-discord-bot.state :as state])
+    (:gen-class))
 
 (defn- log
   "Simple logging helper."
@@ -220,7 +221,3 @@
     ;; Wait for shutdown signal
     (while (not (state/system-shutdown?))
            (Thread/sleep 1000))))
-
-;; Entry point for bb start
-(when (= *file* (System/getProperty "babashka.file"))
-  (-main))

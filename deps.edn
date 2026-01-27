@@ -1,8 +1,9 @@
-{:paths ["src" "test"]
+{:paths ["src"]
 
  :deps {org.clojure/clojure {:mvn/version "1.11.4"}
         org.babashka/http-client {:mvn/version "0.4.23"}
-        cheshire/cheshire {:mvn/version "5.13.0"}}
+        cheshire/cheshire {:mvn/version "5.13.0"}
+        babashka/fs {:mvn/version "0.5.22"}}
 
  :aliases
  {:test
@@ -23,4 +24,11 @@
 
   :format-fix
   {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.12.0"}}
-   :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}}}
+   :main-opts ["-m" "cljfmt.main" "fix" "src" "test"]}
+
+  :build
+  {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+   :ns-default build}
+
+  :run
+  {:main-opts ["-m" "ark-discord-bot.main"]}}}
