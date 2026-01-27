@@ -2,6 +2,7 @@
     "Tests for Discord Gateway."
     (:require [ark-discord-bot.effects.gateway :as gateway]
               [ark-discord-bot.state :as state]
+              [babashka.http-client.websocket :as ws]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-parse-interaction-restart-confirm
@@ -196,6 +197,19 @@
         ;; IDENTIFY (op=2) should be sent before heartbeat loop starts
                    (is (= [2 :heartbeat-loop-started] @send-order)
                        "IDENTIFY should be sent before heartbeat loop starts")))))
+
+(deftest test-process-gateway-message-reconnect
+  (testing "process-gateway-message closes connection on RECONNECT opcode"
+    (let [close-called (atom false)
+          mock-ws-client (reify Object)]
+      (state/init-state! {:failure-threshold 3})
+      (with-redefs [ws/close! (fn [_] (reset! close-called true))]
+        ;; Simulate receiving RECONNECT from server (op=7)
+                   (#'gateway/process-gateway-message
+                    mock-ws-client "token" {:op 7} nil nil nil)
+        ;; Verify connection was closed
+                   (is (true? @close-called)
+                       "Should close WebSocket connection when receiving RECONNECT opcode")))))
 
 (deftest test-heartbeat-stops-on-connection-id-change
   (testing "heartbeat loop stops when connection-id changes (reconnection)"
