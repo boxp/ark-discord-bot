@@ -196,6 +196,15 @@
   [ws-client]
   (send-json ws-client (build-heartbeat (state/get-gateway-seq))))
 
+(defn- handle-reconnect
+  "Handle RECONNECT opcode - close connection to trigger reconnection.
+   Discord requests reconnection; closing the connection triggers the close handler
+   which will schedule automatic reconnection."
+  [ws-client]
+  (println "[warn] [gateway] Server requested reconnect")
+  (println "[info] [gateway] Closing connection for reconnect...")
+  (ws/close! ws-client))
+
 (defn- process-gateway-message
   "Process a single gateway message by opcode."
   [ws token data on-message on-interaction on-ready]
@@ -209,7 +218,7 @@
       (= op (:dispatch opcodes)) (handle-dispatch data event-type on-message
                                                   on-interaction on-ready)
       (= op (:invalid-session opcodes)) (handle-invalid-session)
-      (= op (:reconnect opcodes)) (println "[warn] [gateway] Server requested reconnect"))))
+      (= op (:reconnect opcodes)) (handle-reconnect ws))))
 
 (defn- create-on-message-handler
   "Create the on-message handler for WebSocket."
