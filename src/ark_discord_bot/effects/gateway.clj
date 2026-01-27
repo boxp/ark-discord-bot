@@ -134,34 +134,32 @@
 (declare connect-internal)
 
 (defn create-reconnect-fn
-  "Create reconnect function for automatic reconnection."
+  "Create reconnect function for automatic reconnection.
+   Uses loop/recur to avoid stack overflow on repeated failures."
   [token on-message on-interaction on-ready]
-  (let [attempt (atom 0)]
-    (fn []
+  (fn []
+    (loop [attempt 0]
       (when-not (state/system-shutdown?)
-        (let [delay-ms (calculate-backoff @attempt)
-              current-attempt @attempt]
+        (let [delay-ms (calculate-backoff attempt)]
           (println (str "[info] [gateway] Reconnecting in " delay-ms
-                        "ms (attempt " (inc current-attempt) ")..."))
+                        "ms (attempt " (inc attempt) ")..."))
           (Thread/sleep delay-ms)
-          (swap! attempt inc)
-          (try
-            (let [ws-client (connect-internal token on-message on-interaction
-                                              on-ready
-                                              (create-reconnect-fn token on-message
-                                                                   on-interaction
-                                                                   on-ready))]
-              (state/set-ws-client! ws-client)
-              (println "[info] [gateway] Reconnection initiated successfully")
-              (reset! attempt 0))
-            (catch Exception e
-              (println (str "[error] [gateway] Reconnect failed: "
-                            (.getMessage e)))
-              ;; Retry reconnection on failure
-              (when-not (state/system-shutdown?)
-                (println "[info] [gateway] Will retry reconnection...")
-                ((create-reconnect-fn token on-message
-                                      on-interaction on-ready))))))))))
+          (let [result (try
+                         (let [ws-client (connect-internal
+                                          token on-message on-interaction
+                                          on-ready
+                                          (create-reconnect-fn token on-message
+                                                               on-interaction
+                                                               on-ready))]
+                           (state/set-ws-client! ws-client)
+                           (println "[info] [gateway] Reconnection initiated")
+                           :success)
+                         (catch Exception e
+                           (println (str "[error] [gateway] Reconnect failed: "
+                                         (.getMessage e)))
+                           :failure))]
+            (when (= result :failure)
+              (recur (inc attempt)))))))))
 
 (defn- connect-internal
   "Internal connect with on-reconnect callback."
