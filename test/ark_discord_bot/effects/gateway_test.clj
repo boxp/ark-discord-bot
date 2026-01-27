@@ -67,5 +67,56 @@
     (is (= "INVALID_SESSION" (gateway/opcode-name 9)))
     (is (= "UNKNOWN(99)" (gateway/opcode-name 99)))))
 
+(deftest test-create-close-handler-with-reconnect
+  (testing "close handler with reconnect triggers reconnect callback"
+    (let [reconnect-called (atom false)
+          reconnect-fn (fn [] (reset! reconnect-called true))
+          handler (gateway/create-close-handler reconnect-fn)]
+      (state/init-state! {:failure-threshold 3})
+      (handler nil 1006 "")
+      ;; Give future time to execute
+      (Thread/sleep 100)
+      (is (true? @reconnect-called))))
+  (testing "close handler with reconnect sets gateway running to false"
+    (state/init-state! {:failure-threshold 3})
+    (is (true? (state/gateway-running?)))
+    (let [handler (gateway/create-close-handler (fn []))]
+      (handler nil 1006 "")
+      (is (false? (state/gateway-running?))))))
+
+(deftest test-create-close-handler-normal-close
+  (testing "close handler with code 1000 does not trigger reconnect"
+    (let [reconnect-called (atom false)
+          reconnect-fn (fn [] (reset! reconnect-called true))
+          handler (gateway/create-close-handler reconnect-fn)]
+      (state/init-state! {:failure-threshold 3})
+      (handler nil 1000 "Normal closure")
+      (Thread/sleep 100)
+      (is (false? @reconnect-called)))))
+
+(deftest test-should-reconnect?
+  (testing "should-reconnect? returns false for code 1000"
+    (is (false? (#'gateway/should-reconnect? 1000))))
+  (testing "should-reconnect? returns true for code 1006"
+    (is (true? (#'gateway/should-reconnect? 1006))))
+  (testing "should-reconnect? returns true for code 4000"
+    (is (true? (#'gateway/should-reconnect? 4000)))))
+
+(deftest test-calculate-backoff
+  (testing "calculate-backoff returns initial delay for attempt 0"
+    (is (= 1000 (gateway/calculate-backoff 0))))
+  (testing "calculate-backoff doubles for each attempt"
+    (is (= 2000 (gateway/calculate-backoff 1)))
+    (is (= 4000 (gateway/calculate-backoff 2)))
+    (is (= 8000 (gateway/calculate-backoff 3))))
+  (testing "calculate-backoff caps at max delay"
+    (is (= 60000 (gateway/calculate-backoff 10)))))
+
+(deftest test-create-reconnect-fn
+  (testing "create-reconnect-fn returns a function"
+    (let [reconnect-fn (gateway/create-reconnect-fn
+                        "token" (fn [_]) nil nil)]
+      (is (fn? reconnect-fn)))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)

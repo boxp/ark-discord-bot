@@ -95,13 +95,35 @@
                           :interaction-token (:token data)}
         nil))))
 
+(def ^:private reconnect-initial-delay-ms 1000)
+(def ^:private reconnect-max-delay-ms 60000)
+
+(defn- should-reconnect?
+  "Check if we should attempt reconnection based on close code.
+   Code 1000 = normal closure (no reconnect).
+   Code 1006 = abnormal closure (reconnect)."
+  [code]
+  (not= code 1000))
+
+(defn calculate-backoff
+  "Calculate exponential backoff delay for reconnection attempt."
+  [attempt]
+  (min reconnect-max-delay-ms
+       (* reconnect-initial-delay-ms (bit-shift-left 1 attempt))))
+
 (defn create-close-handler
-  "Create WebSocket close handler."
-  []
-  (fn [_ws code reason]
-    (state/set-gateway-running! false)
-    (println (str "[info] [gateway] Connection closed: code=" code
-                  ", reason=" reason))))
+  "Create WebSocket close handler.
+   Optional on-reconnect callback is called when reconnection should be attempted."
+  ([]
+   (create-close-handler nil))
+  ([on-reconnect]
+   (fn [_ws code reason]
+     (state/set-gateway-running! false)
+     (println (str "[info] [gateway] Connection closed: code=" code
+                   ", reason=" reason))
+     (when (and on-reconnect (should-reconnect? code))
+       (println "[info] [gateway] Scheduling reconnection...")
+       (future (on-reconnect))))))
 
 (defn create-error-handler
   "Create WebSocket error handler."
@@ -109,6 +131,76 @@
   (fn [_ws error]
     (println (str "[error] [gateway] WebSocket error: "
                   (.getMessage error)))))
+
+(declare connect-internal)
+
+(defn create-reconnect-fn
+  "Create reconnect function for automatic reconnection."
+  [token on-message on-interaction on-ready]
+  (let [attempt (atom 0)]
+    (fn []
+      (let [delay-ms (calculate-backoff @attempt)]
+        (println (str "[info] [gateway] Reconnecting in " delay-ms "ms..."))
+        (Thread/sleep delay-ms)
+        (swap! attempt inc)
+        (try
+          (let [ws-client (connect-internal token on-message on-interaction
+                                            on-ready
+                                            (create-reconnect-fn token on-message
+                                                                 on-interaction
+                                                                 on-ready))]
+            (state/set-ws-client! ws-client)
+            (reset! attempt 0))
+          (catch Exception e
+            (println (str "[error] [gateway] Reconnect failed: "
+                          (.getMessage e)))))))))
+
+(defn- connect-internal
+  "Internal connect with on-reconnect callback."
+  [token on-message on-interaction on-ready on-reconnect]
+  (println "[info] [gateway] Connecting to Discord Gateway...")
+  (state/reset-gateway-state!)
+  (try
+    (ws/websocket
+     {:uri gateway-url
+      :on-open
+      (fn [_ws]
+        (println "[info] [gateway] WebSocket connection established"))
+      :on-message
+      (fn [_ws msg last?]
+        (state/append-to-msg-buffer! (str msg))
+        (when last?
+          (try
+            (let [full-msg (state/clear-msg-buffer!)
+                  data (json/parse-string full-msg true)
+                  op (:op data)
+                  event-type (:t data)]
+              (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                            (when event-type (str ", event=" event-type))))
+              (cond
+                (= op (:hello opcodes))
+                (handle-hello _ws token (:d data))
+
+                (= op (:dispatch opcodes))
+                (handle-dispatch data event-type on-message
+                                 on-interaction on-ready)
+
+                (= op (:invalid-session opcodes))
+                (do
+                 (println "[error] [gateway] Invalid session - check bot token")
+                 (state/set-gateway-running! false))
+
+                (= op (:reconnect opcodes))
+                (println "[warn] [gateway] Server requested reconnect")))
+            (catch Exception e
+              (println (str "[error] [gateway] on-message error: "
+                            (.getMessage e)))))))
+      :on-close (create-close-handler on-reconnect)
+      :on-error (create-error-handler)})
+    (catch Exception e
+      (println (str "[error] [gateway] Failed to connect: "
+                    (.getMessage e)))
+      (throw e))))
 
 (defn connect
   "Connect to Discord Gateway.
@@ -121,49 +213,16 @@
   ([token on-message on-interaction]
    (connect token on-message on-interaction nil))
   ([token on-message on-interaction on-ready]
-   (println "[info] [gateway] Connecting to Discord Gateway...")
-   ;; Reset gateway state for clean reconnection
-   (state/reset-gateway-state!)
-   (try
-     (ws/websocket
-      {:uri gateway-url
-       :on-open
-       (fn [_ws]
-         (println "[info] [gateway] WebSocket connection established"))
-       :on-message
-       (fn [_ws msg last?]
-         ;; Buffer fragmented messages
-         (state/append-to-msg-buffer! (str msg))
-         (when last?
-           (try
-             (let [full-msg (state/clear-msg-buffer!)
-                   data (json/parse-string full-msg true)
-                   op (:op data)
-                   event-type (:t data)]
-               ;; Log received opcode for debugging
-               (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                             (when event-type (str ", event=" event-type))))
-               (cond
-                 (= op (:hello opcodes))
-                 (handle-hello _ws token (:d data))
+   (connect-internal token on-message on-interaction on-ready nil)))
 
-                 (= op (:dispatch opcodes))
-                 (handle-dispatch data event-type on-message
-                                  on-interaction on-ready)
-
-                 (= op (:invalid-session opcodes))
-                 (do
-                  (println "[error] [gateway] Invalid session - check bot token")
-                  (state/set-gateway-running! false))
-
-                 (= op (:reconnect opcodes))
-                 (println "[warn] [gateway] Server requested reconnect")))
-             (catch Exception e
-               (println (str "[error] [gateway] on-message error: "
-                             (.getMessage e)))))))
-       :on-close (create-close-handler)
-       :on-error (create-error-handler)})
-     (catch Exception e
-       (println (str "[error] [gateway] Failed to connect: "
-                     (.getMessage e)))
-       (throw e)))))
+(defn connect-with-reconnect
+  "Connect to Discord Gateway with automatic reconnection on close.
+   Arguments same as connect."
+  ([token on-message]
+   (connect-with-reconnect token on-message nil nil))
+  ([token on-message on-interaction]
+   (connect-with-reconnect token on-message on-interaction nil))
+  ([token on-message on-interaction on-ready]
+   (let [reconnect-fn (create-reconnect-fn token on-message
+                                           on-interaction on-ready)]
+     (connect-internal token on-message on-interaction on-ready reconnect-fn))))
