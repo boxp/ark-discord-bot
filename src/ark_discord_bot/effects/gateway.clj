@@ -50,18 +50,27 @@
   [ws-client payload]
   (ws/send! ws-client (json/generate-string payload)))
 
+(defn- connection-active?
+  "Check if the connection is still active by verifying both running state
+   and connection ID. Prevents old heartbeat loops from interfering."
+  [conn-id]
+  (and (state/gateway-running?)
+       (= conn-id (state/get-connection-id))))
+
 (defn- start-heartbeat
   "Start heartbeat loop in background.
-   Sends first heartbeat immediately per Discord Gateway spec."
+   Sends first heartbeat immediately per Discord Gateway spec.
+   Stops when connection-id changes (on reconnection)."
   [ws-client interval-ms]
-  (future
-   (loop []
-     (when (state/gateway-running?)
-       (try
-         (send-json ws-client (build-heartbeat (state/get-gateway-seq)))
-         (catch Exception _ (state/set-gateway-running! false)))
-       (Thread/sleep interval-ms)
-       (recur)))))
+  (let [conn-id (state/get-connection-id)]
+    (future
+     (loop []
+       (when (connection-active? conn-id)
+         (try
+           (send-json ws-client (build-heartbeat (state/get-gateway-seq)))
+           (catch Exception _ (state/set-gateway-running! false)))
+         (Thread/sleep interval-ms)
+         (recur))))))
 
 (defn- handle-hello
   "Handle HELLO opcode - identify first, then start heartbeat.
@@ -148,14 +157,16 @@
 (defn- attempt-reconnect
   "Attempt a single reconnection. Returns :success or :failure."
   [token on-message on-interaction on-ready make-reconnect-fn]
+  (println "[debug] [gateway] Attempting reconnection...")
   (try
     (let [ws-client (connect-internal token on-message on-interaction
                                       on-ready (make-reconnect-fn))]
       (state/set-ws-client! ws-client)
-      (println "[info] [gateway] Reconnection initiated")
+      (println "[info] [gateway] Reconnection initiated successfully")
       :success)
     (catch Exception e
-      (println (str "[error] [gateway] Reconnect failed: " (.getMessage e)))
+      (println (str "[error] [gateway] Reconnect failed: " (type e)
+                    " - " (.getMessage e)))
       :failure)))
 
 (defn create-reconnect-fn

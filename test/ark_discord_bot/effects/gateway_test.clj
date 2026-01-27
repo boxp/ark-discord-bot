@@ -197,5 +197,26 @@
                    (is (= [2 :heartbeat-loop-started] @send-order)
                        "IDENTIFY should be sent before heartbeat loop starts")))))
 
+(deftest test-heartbeat-stops-on-connection-id-change
+  (testing "heartbeat loop stops when connection-id changes (reconnection)"
+    (let [send-count (atom 0)
+          mock-ws-client (reify Object)]
+      (state/init-state! {:failure-threshold 3})
+      (with-redefs [gateway/send-json (fn [_ _] (swap! send-count inc))]
+                   (let [_ (#'gateway/start-heartbeat mock-ws-client 50)]
+          ;; Wait for first heartbeat
+                     (Thread/sleep 80)
+                     (let [count-before @send-count]
+            ;; Simulate reconnection by resetting gateway state
+                       (state/reset-gateway-state!)
+            ;; Wait for potential additional heartbeats
+                       (Thread/sleep 150)
+            ;; Old heartbeat loop should have stopped
+            ;; Only 1-2 more heartbeats at most before noticing id change
+                       (is (<= @send-count (+ count-before 2))
+                           "Old heartbeat loop should stop after connection-id changes"))
+          ;; Clean up
+                     (state/set-gateway-running! false))))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
