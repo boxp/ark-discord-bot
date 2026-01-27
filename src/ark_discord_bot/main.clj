@@ -26,10 +26,12 @@
 (defn- fetch-players-via-rcon
   "Connect to RCON and fetch player list."
   [rcon-client timeout-ms]
-  (let [connected-client (rcon/connect rcon-client timeout-ms)
-        players (rcon/parse-listplayers (rcon/execute connected-client "ListPlayers"))]
-    (safe-disconnect connected-client)
-    {:connected true :players players}))
+  (let [connected-client (rcon/connect rcon-client timeout-ms)]
+    (try
+      (let [players (rcon/parse-listplayers (rcon/execute connected-client "ListPlayers"))]
+        {:connected true :players players})
+      (finally
+        (safe-disconnect connected-client)))))
 
 (defn- check-rcon-status
   "Check RCON connectivity and get player list."
