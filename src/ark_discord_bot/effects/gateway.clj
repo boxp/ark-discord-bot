@@ -64,11 +64,12 @@
        (recur)))))
 
 (defn- handle-hello
-  "Handle HELLO opcode - start heartbeat and identify."
+  "Handle HELLO opcode - identify first, then start heartbeat.
+   Discord requires IDENTIFY to be sent before starting heartbeat loop."
   [ws-client token data]
   (let [interval (:heartbeat_interval data)]
-    (start-heartbeat ws-client interval)
-    (send-json ws-client (build-identify token))))
+    (send-json ws-client (build-identify token))
+    (start-heartbeat ws-client interval)))
 
 (defn- handle-dispatch
   "Handle DISPATCH opcode - process events."
