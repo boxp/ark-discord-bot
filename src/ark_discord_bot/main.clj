@@ -39,9 +39,9 @@
   (try
     (fetch-players-via-rcon rcon-client timeout-ms)
     (catch Exception e
-      (log :warn (str "RCON connection failed: " (.getMessage e)
+      (log :warn (str "RCON connection failed: " (type e) " - " (.toString e)
                       " (host=" (:host rcon-client) ", port=" (:port rcon-client) ")"))
-      {:connected false :error (.getMessage e)})))
+      {:connected false :error (.toString e)})))
 
 (defn- check-status
   "Perform full status check."
