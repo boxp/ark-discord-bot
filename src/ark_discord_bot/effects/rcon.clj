@@ -15,6 +15,16 @@
   [client]
   (some? (:socket client)))
 
+(defn- read-response
+  "Read RCON response from input stream."
+  [in]
+  (let [size-bytes (byte-array 4)]
+    (.readFully in size-bytes)
+    (let [size (protocol/read-int-le size-bytes)
+          response-bytes (byte-array size)]
+      (.readFully in response-bytes)
+      (protocol/unpack-response response-bytes))))
+
 (defn- send-packet
   "Send packet and receive response."
   [socket request-id packet-type body]
@@ -23,12 +33,7 @@
         packet (protocol/pack-packet request-id packet-type body)]
     (.write out packet)
     (.flush out)
-    (let [size-bytes (byte-array 4)]
-      (.readFully in size-bytes)
-      (let [size (protocol/read-int-le size-bytes)
-            response-bytes (byte-array size)]
-        (.readFully in response-bytes)
-        (protocol/unpack-response response-bytes)))))
+    (read-response in)))
 
 (defn connect
   "Connect and authenticate to RCON server."

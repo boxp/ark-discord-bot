@@ -48,27 +48,34 @@
   [state]
   (assoc state :failure-count 0))
 
+(defn- recovery-notification?
+  "Check if this is a recovery to running state."
+  [current previous]
+  (and (= current :running)
+       (not= previous :running)))
+
+(defn- starting-notification?
+  "Check if server is transitioning to starting state."
+  [current previous]
+  (and (= current :starting)
+       (= previous :not-ready)))
+
+(defn- degraded-notification?
+  "Check if server degraded from running state."
+  [current previous]
+  (and (#{:not-ready :starting} current)
+       (= previous :running)))
+
 (defn format-notification
   "Format status change notification message."
   [current-status previous-status]
   (cond
-    ;; Recovery to running
-    (and (= current-status :running)
-         (not= previous-status :running))
+    (recovery-notification? current-status previous-status)
     "🟢 ARKサーバーが接続準備完了しました！ 🦕"
-
-    ;; Starting from not-ready
-    (and (= current-status :starting)
-         (= previous-status :not-ready))
+    (starting-notification? current-status previous-status)
     "🟡 ARKサーバーポッドが稼働中、ゲームサーバー起動中..."
-
-    ;; Degraded from running
-    (and (#{:not-ready :starting} current-status)
-         (= previous-status :running))
+    (degraded-notification? current-status previous-status)
     "🟡 ARKサーバーが再起動中または準備未完了です..."
-
-    ;; Error state
     (= current-status :error)
     "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
-
     :else nil))

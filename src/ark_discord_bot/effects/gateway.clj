@@ -79,21 +79,23 @@
     "INTERACTION_CREATE" (when on-interaction (on-interaction (:d data)))
     nil))
 
+(defn- build-interaction-result
+  "Build interaction result map from action and data."
+  [action data]
+  {:action action
+   :interaction-id (:id data)
+   :interaction-token (:token data)})
+
 (defn parse-interaction
   "Parse interaction data from INTERACTION_CREATE event.
    Returns {:action :restart-confirm|:restart-cancel
             :interaction-id :interaction-token} or nil."
   [data]
   (when (= 3 (:type data))  ;; MESSAGE_COMPONENT type
-    (let [custom-id (get-in data [:data :custom_id])]
-      (case custom-id
-        "restart_confirm" {:action :restart-confirm
-                           :interaction-id (:id data)
-                           :interaction-token (:token data)}
-        "restart_cancel" {:action :restart-cancel
-                          :interaction-id (:id data)
-                          :interaction-token (:token data)}
-        nil))))
+    (case (get-in data [:data :custom_id])
+      "restart_confirm" (build-interaction-result :restart-confirm data)
+      "restart_cancel" (build-interaction-result :restart-cancel data)
+      nil)))
 
 (def ^:private reconnect-initial-delay-ms 1000)
 (def ^:private reconnect-max-delay-ms 60000)
@@ -133,33 +135,84 @@
 
 (declare connect-internal)
 
+(defn- wait-before-reconnect
+  "Wait with exponential backoff before reconnection attempt."
+  [attempt]
+  (let [delay-ms (calculate-backoff attempt)]
+    (println (str "[info] [gateway] Reconnecting in " delay-ms
+                  "ms (attempt " (inc attempt) ")..."))
+    (Thread/sleep delay-ms)))
+
+(defn- attempt-reconnect
+  "Attempt a single reconnection. Returns :success or :failure."
+  [token on-message on-interaction on-ready make-reconnect-fn]
+  (try
+    (let [ws-client (connect-internal token on-message on-interaction
+                                      on-ready (make-reconnect-fn))]
+      (state/set-ws-client! ws-client)
+      (println "[info] [gateway] Reconnection initiated")
+      :success)
+    (catch Exception e
+      (println (str "[error] [gateway] Reconnect failed: " (.getMessage e)))
+      :failure)))
+
 (defn create-reconnect-fn
   "Create reconnect function for automatic reconnection.
    Uses loop/recur to avoid stack overflow on repeated failures."
   [token on-message on-interaction on-ready]
-  (fn []
-    (loop [attempt 0]
-      (when-not (state/system-shutdown?)
-        (let [delay-ms (calculate-backoff attempt)]
-          (println (str "[info] [gateway] Reconnecting in " delay-ms
-                        "ms (attempt " (inc attempt) ")..."))
-          (Thread/sleep delay-ms)
-          (let [result (try
-                         (let [ws-client (connect-internal
-                                          token on-message on-interaction
-                                          on-ready
-                                          (create-reconnect-fn token on-message
-                                                               on-interaction
-                                                               on-ready))]
-                           (state/set-ws-client! ws-client)
-                           (println "[info] [gateway] Reconnection initiated")
-                           :success)
-                         (catch Exception e
-                           (println (str "[error] [gateway] Reconnect failed: "
-                                         (.getMessage e)))
-                           :failure))]
+  (let [make-reconnect-fn #(create-reconnect-fn token on-message
+                                                on-interaction on-ready)]
+    (fn []
+      (loop [attempt 0]
+        (when-not (state/system-shutdown?)
+          (wait-before-reconnect attempt)
+          (let [result (attempt-reconnect token on-message on-interaction
+                                          on-ready make-reconnect-fn)]
             (when (= result :failure)
               (recur (inc attempt)))))))))
+
+(defn- handle-invalid-session
+  "Handle INVALID_SESSION opcode."
+  []
+  (println "[error] [gateway] Invalid session - check bot token")
+  (state/set-gateway-running! false))
+
+(defn- process-gateway-message
+  "Process a single gateway message by opcode."
+  [ws token data on-message on-interaction on-ready]
+  (let [op (:op data)
+        event-type (:t data)]
+    (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                  (when event-type (str ", event=" event-type))))
+    (cond
+      (= op (:hello opcodes)) (handle-hello ws token (:d data))
+      (= op (:dispatch opcodes)) (handle-dispatch data event-type on-message
+                                                  on-interaction on-ready)
+      (= op (:invalid-session opcodes)) (handle-invalid-session)
+      (= op (:reconnect opcodes)) (println "[warn] [gateway] Server requested reconnect"))))
+
+(defn- create-on-message-handler
+  "Create the on-message handler for WebSocket."
+  [token on-message on-interaction on-ready]
+  (fn [ws msg last?]
+    (state/append-to-msg-buffer! (str msg))
+    (when last?
+      (try
+        (let [full-msg (state/clear-msg-buffer!)
+              data (json/parse-string full-msg true)]
+          (process-gateway-message ws token data on-message on-interaction on-ready))
+        (catch Exception e
+          (println (str "[error] [gateway] on-message error: " (.getMessage e))))))))
+
+(defn- establish-websocket
+  "Establish WebSocket connection with handlers."
+  [token on-message on-interaction on-ready on-reconnect]
+  (ws/websocket
+   {:uri gateway-url
+    :on-open (fn [_ws] (println "[info] [gateway] WebSocket connection established"))
+    :on-message (create-on-message-handler token on-message on-interaction on-ready)
+    :on-close (create-close-handler on-reconnect)
+    :on-error (create-error-handler)}))
 
 (defn- connect-internal
   "Internal connect with on-reconnect callback."
@@ -167,45 +220,9 @@
   (println "[info] [gateway] Connecting to Discord Gateway...")
   (state/reset-gateway-state!)
   (try
-    (ws/websocket
-     {:uri gateway-url
-      :on-open
-      (fn [_ws]
-        (println "[info] [gateway] WebSocket connection established"))
-      :on-message
-      (fn [_ws msg last?]
-        (state/append-to-msg-buffer! (str msg))
-        (when last?
-          (try
-            (let [full-msg (state/clear-msg-buffer!)
-                  data (json/parse-string full-msg true)
-                  op (:op data)
-                  event-type (:t data)]
-              (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                            (when event-type (str ", event=" event-type))))
-              (cond
-                (= op (:hello opcodes))
-                (handle-hello _ws token (:d data))
-
-                (= op (:dispatch opcodes))
-                (handle-dispatch data event-type on-message
-                                 on-interaction on-ready)
-
-                (= op (:invalid-session opcodes))
-                (do
-                 (println "[error] [gateway] Invalid session - check bot token")
-                 (state/set-gateway-running! false))
-
-                (= op (:reconnect opcodes))
-                (println "[warn] [gateway] Server requested reconnect")))
-            (catch Exception e
-              (println (str "[error] [gateway] on-message error: "
-                            (.getMessage e)))))))
-      :on-close (create-close-handler on-reconnect)
-      :on-error (create-error-handler)})
+    (establish-websocket token on-message on-interaction on-ready on-reconnect)
     (catch Exception e
-      (println (str "[error] [gateway] Failed to connect: "
-                    (.getMessage e)))
+      (println (str "[error] [gateway] Failed to connect: " (.getMessage e)))
       (throw e))))
 
 (defn connect

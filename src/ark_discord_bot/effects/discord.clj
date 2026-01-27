@@ -76,26 +76,28 @@
                             (if (= :running status) :success :warning))]
      (send-embed client embed channel-id))))
 
+(defn- build-confirmation-embed
+  "Build the confirmation embed for restart."
+  []
+  {:title "⚠️ ARKサーバー再起動の確認"
+   :description (str "本当にARKサーバーを再起動しますか？\n\n"
+                     "⚠️ **注意**: 再起動中はプレイヤーが切断され、"
+                     "サーバーが再度利用可能になるまで数分かかります。")
+   :color 0xFF9900})
+
+(defn- build-restart-buttons
+  "Build the restart confirmation buttons."
+  []
+  [{:type 2 :style 4 :label "再起動する"
+    :emoji {:name "🔄"} :custom_id "restart_confirm"}
+   {:type 2 :style 2 :label "キャンセル"
+    :emoji {:name "❌"} :custom_id "restart_cancel"}])
+
 (defn build-restart-confirmation
   "Build restart confirmation embed with buttons."
   []
-  (let [embed {:title "⚠️ ARKサーバー再起動の確認"
-               :description (str "本当にARKサーバーを再起動しますか？\n\n"
-                                 "⚠️ **注意**: 再起動中はプレイヤーが切断され、"
-                                 "サーバーが再度利用可能になるまで数分かかります。")
-               :color 0xFF9900}
-        components [{:type 1
-                     :components [{:type 2
-                                   :style 4
-                                   :label "再起動する"
-                                   :emoji {:name "🔄"}
-                                   :custom_id "restart_confirm"}
-                                  {:type 2
-                                   :style 2
-                                   :label "キャンセル"
-                                   :emoji {:name "❌"}
-                                   :custom_id "restart_cancel"}]}]]
-    {:embed embed :components components}))
+  {:embed (build-confirmation-embed)
+   :components [{:type 1 :components (build-restart-buttons)}]})
 
 (defn build-interaction-response
   "Build interaction response payload."
@@ -103,24 +105,20 @@
   {:type response-type
    :data {:content content}})
 
+(defn- build-disabled-restart-buttons
+  "Build disabled restart buttons for interaction update."
+  []
+  [{:type 2 :style 4 :label "再起動する" :emoji {:name "🔄"}
+    :custom_id "restart_confirm" :disabled true}
+   {:type 2 :style 2 :label "キャンセル" :emoji {:name "❌"}
+    :custom_id "restart_cancel" :disabled true}])
+
 (defn build-interaction-update
   "Build interaction update message response with disabled buttons."
   [content]
   {:type 7  ;; UPDATE_MESSAGE
    :data {:content content
-          :components [{:type 1
-                        :components [{:type 2
-                                      :style 4
-                                      :label "再起動する"
-                                      :emoji {:name "🔄"}
-                                      :custom_id "restart_confirm"
-                                      :disabled true}
-                                     {:type 2
-                                      :style 2
-                                      :label "キャンセル"
-                                      :emoji {:name "❌"}
-                                      :custom_id "restart_cancel"
-                                      :disabled true}]}]}})
+          :components [{:type 1 :components (build-disabled-restart-buttons)}]}})
 
 (defn send-restart-confirmation
   "Send restart confirmation with buttons.
