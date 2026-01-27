@@ -7,18 +7,21 @@
   },
   {
     "name": "java.net.Socket",
+    "allPublicMethods": true,
     "methods": [
       {"name": "<init>", "parameterTypes": ["java.lang.String", "int"]}
     ]
   },
   {
     "name": "java.io.DataInputStream",
+    "allPublicMethods": true,
     "methods": [
       {"name": "<init>", "parameterTypes": ["java.io.InputStream"]}
     ]
   },
   {
     "name": "java.io.DataOutputStream",
+    "allPublicMethods": true,
     "methods": [
       {"name": "<init>", "parameterTypes": ["java.io.OutputStream"]}
     ]
