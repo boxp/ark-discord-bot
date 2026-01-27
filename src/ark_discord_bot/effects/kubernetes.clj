@@ -81,20 +81,26 @@
       (throw (ex-info "Failed to get deployment"
                       {:status (:status resp) :body (:body resp)})))))
 
+(defn- build-restart-patch
+  "Build patch payload for restarting deployment."
+  []
+  {:spec {:template {:metadata {:annotations
+                                {"kubectl.kubernetes.io/restartedAt"
+                                 (str (java.time.Instant/now))}}}}})
+
+(defn- execute-patch
+  "Execute PATCH request against Kubernetes API."
+  [client token patch]
+  (let [opts (-> (request-opts client {"Authorization" (str "Bearer " token)
+                                       "Content-Type" "application/strategic-merge-patch+json"})
+                 (assoc :body (json/generate-string patch)))]
+    (http/patch (deployment-url client) opts)))
+
 (defn restart-deployment
   "Restart deployment by patching with new annotation."
   [client]
   (let [token (read-token client)
-        patch {:spec
-               {:template
-                {:metadata
-                 {:annotations
-                  {"kubectl.kubernetes.io/restartedAt"
-                   (str (java.time.Instant/now))}}}}}
-        opts (-> (request-opts client {"Authorization" (str "Bearer " token)
-                                       "Content-Type" "application/strategic-merge-patch+json"})
-                 (assoc :body (json/generate-string patch)))
-        resp (http/patch (deployment-url client) opts)]
+        resp (execute-patch client token (build-restart-patch))]
     (when (not= 200 (:status resp))
       (throw (ex-info "Failed to restart deployment"
                       {:status (:status resp) :body (:body resp)})))))

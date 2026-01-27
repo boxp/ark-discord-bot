@@ -34,29 +34,50 @@
       :failure-threshold 3
       :log-level "INFO"})
 
-(defn load-config
-  "Load configuration from environment variables.
-   Environment variable names match the Python implementation."
+(defn- load-discord-config
+  "Load Discord-related configuration."
   []
   {:discord-token (get-required-env "DISCORD_BOT_TOKEN")
-   :discord-channel-id (get-required-env "DISCORD_CHANNEL_ID")
-   :k8s-namespace (get-env "KUBERNETES_NAMESPACE"
+   :discord-channel-id (get-required-env "DISCORD_CHANNEL_ID")})
+
+(defn- load-k8s-config
+  "Load Kubernetes-related configuration."
+  []
+  {:k8s-namespace (get-env "KUBERNETES_NAMESPACE"
                            (:k8s-namespace default-config))
    :k8s-deployment (get-env "KUBERNETES_DEPLOYMENT_NAME"
                             (:k8s-deployment default-config))
    :k8s-service (get-env "KUBERNETES_SERVICE_NAME"
-                         (:k8s-service default-config))
-   :rcon-host (get-env "RCON_HOST" (:rcon-host default-config))
+                         (:k8s-service default-config))})
+
+(defn- load-rcon-config
+  "Load RCON-related configuration."
+  []
+  {:rcon-host (get-env "RCON_HOST" (:rcon-host default-config))
    :rcon-port (parse-int (get-env "RCON_PORT")
                          (:rcon-port default-config))
    :rcon-password (get-required-env "RCON_PASSWORD")
    :rcon-timeout (parse-int (get-env "RCON_TIMEOUT")
-                            (:rcon-timeout default-config))
-   :monitor-interval (* 1000 (parse-int (get-env "MONITORING_INTERVAL")
-                                        (/ (:monitor-interval default-config) 1000)))
-   :failure-threshold (parse-int (get-env "FAILURE_THRESHOLD")
-                                 (:failure-threshold default-config))
-   :log-level (get-env "LOG_LEVEL" (:log-level default-config))})
+                            (:rcon-timeout default-config))})
+
+(defn- load-monitor-config
+  "Load monitoring-related configuration."
+  []
+  (let [default-interval-sec (/ (:monitor-interval default-config) 1000)]
+    {:monitor-interval (* 1000 (parse-int (get-env "MONITORING_INTERVAL")
+                                          default-interval-sec))
+     :failure-threshold (parse-int (get-env "FAILURE_THRESHOLD")
+                                   (:failure-threshold default-config))
+     :log-level (get-env "LOG_LEVEL" (:log-level default-config))}))
+
+(defn load-config
+  "Load configuration from environment variables.
+   Environment variable names match the Python implementation."
+  []
+  (merge (load-discord-config)
+         (load-k8s-config)
+         (load-rcon-config)
+         (load-monitor-config)))
 
 (defn validate-config
   "Validate configuration. Returns config or throws on error."
