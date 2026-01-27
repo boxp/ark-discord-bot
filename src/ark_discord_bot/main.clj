@@ -212,10 +212,10 @@
                                              rcon-client config)]
       (state/set-monitor-future! monitor-future))
     (log :info "Connecting to Discord Gateway...")
-    (let [ws-client (gateway/connect (:discord-token config)
-                                     msg-handler
-                                     interaction-handler
-                                     (create-ready-handler))]
+    (let [ws-client (gateway/connect-with-reconnect (:discord-token config)
+                                                    msg-handler
+                                                    interaction-handler
+                                                    (create-ready-handler))]
       (state/set-ws-client! ws-client))
     (log :info "Bot is running. Press Ctrl+C to stop.")
     ;; Wait for shutdown signal
