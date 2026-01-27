@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "clojure/.*"},
+      {"pattern": ".*\\.clj$"},
+      {"pattern": ".*\\.cljc$"}
+    ]
+  }
+}

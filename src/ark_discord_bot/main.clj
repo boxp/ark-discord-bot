@@ -1,15 +1,16 @@
 (ns ark-discord-bot.main
-    "Main entry point for the ARK Discord Bot.
+  "Main entry point for the ARK Discord Bot.
    Orchestrates all components and manages lifecycle."
-    (:require [ark-discord-bot.config :as config]
-              [ark-discord-bot.core.commands :as commands]
-              [ark-discord-bot.core.monitor :as monitor]
-              [ark-discord-bot.core.status :as status]
-              [ark-discord-bot.effects.discord :as discord]
-              [ark-discord-bot.effects.gateway :as gateway]
-              [ark-discord-bot.effects.kubernetes :as k8s]
-              [ark-discord-bot.effects.rcon :as rcon]
-              [ark-discord-bot.state :as state]))
+  (:require [ark-discord-bot.config :as config]
+            [ark-discord-bot.core.commands :as commands]
+            [ark-discord-bot.core.monitor :as monitor]
+            [ark-discord-bot.core.status :as status]
+            [ark-discord-bot.effects.discord :as discord]
+            [ark-discord-bot.effects.gateway :as gateway]
+            [ark-discord-bot.effects.kubernetes :as k8s]
+            [ark-discord-bot.effects.rcon :as rcon]
+            [ark-discord-bot.state :as state])
+  (:gen-class))
 
 (defn- log
   "Simple logging helper."
@@ -220,7 +221,3 @@
     ;; Wait for shutdown signal
     (while (not (state/system-shutdown?))
            (Thread/sleep 1000))))
-
-;; Entry point for bb start
-(when (= *file* (System/getProperty "babashka.file"))
-  (-main))

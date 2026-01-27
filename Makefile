@@ -1,39 +1,44 @@
-.PHONY: test lint format format-check ci run docker-build docker-run clean
+.PHONY: test lint format format-check ci run uberjar clean docker-build docker-run
 
 # Default target
 all: ci
 
 # Run all tests
 test:
-	bb test
+	clojure -M:test
 
 # Run linter
 lint:
-	bb lint
+	clojure -M:lint
 
 # Check code formatting
 format-check:
-	bb format:check
+	clojure -M:format-check
 
 # Fix code formatting
 format:
-	bb format:fix
+	clojure -M:format-fix
 
 # Run all CI checks
 ci: format-check lint test
 
 # Run the bot
 run:
-	bb run
+	clojure -M:run
 
-# Docker build
-docker-build:
-	bb docker:build
-
-# Docker run
-docker-run:
-	docker run --env-file ../.env ark-discord-bot-clj:latest
+# Build uberjar
+uberjar:
+	clojure -T:build uberjar
 
 # Clean generated files
 clean:
-	rm -rf .cpcache .clj-kondo/.cache target
+	clojure -T:build clean
+	rm -rf .cpcache .clj-kondo/.cache
+
+# Docker build
+docker-build:
+	docker build -t ark-discord-bot:latest .
+
+# Docker run
+docker-run:
+	docker run --env-file .env ark-discord-bot:latest
