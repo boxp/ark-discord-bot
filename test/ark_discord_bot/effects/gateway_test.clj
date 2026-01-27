@@ -170,16 +170,16 @@
                                         (reset! heartbeat-sent true)
                                         (reset! heartbeat-payload payload))]
         ;; Simulate receiving HEARTBEAT request from server (op=1)
-        (#'gateway/process-gateway-message
-         mock-ws-client "token" {:op 1} nil nil nil)
+                   (#'gateway/process-gateway-message
+                    mock-ws-client "token" {:op 1} nil nil nil)
         ;; Verify heartbeat was sent immediately
-        (is (true? @heartbeat-sent)
-            "Should send heartbeat in response to server HEARTBEAT request")
-        (when @heartbeat-sent
-          (is (= 1 (:op @heartbeat-payload))
-              "Response should be HEARTBEAT opcode")
-          (is (= 123 (:d @heartbeat-payload))
-              "Response should include current sequence number"))))))
+                   (is (true? @heartbeat-sent)
+                       "Should send heartbeat in response to server HEARTBEAT request")
+                   (when @heartbeat-sent
+                     (is (= 1 (:op @heartbeat-payload))
+                         "Response should be HEARTBEAT opcode")
+                     (is (= 123 (:d @heartbeat-payload))
+                         "Response should include current sequence number"))))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
