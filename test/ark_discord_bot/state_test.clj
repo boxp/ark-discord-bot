@@ -19,7 +19,8 @@
     (let [gw (state/get-gateway-state)]
       (is (nil? (:seq gw)))
       (is (true? (:running? gw)))
-      (is (= "" (:msg-buffer gw))))))
+      (is (= "" (:msg-buffer gw)))
+      (is (= 0 (:connection-id gw))))))
 
 (deftest test-monitor-state
   (testing "monitor state is initialized correctly"
@@ -101,7 +102,14 @@
     (let [gw (state/get-gateway-state)]
       (is (nil? (:seq gw)))
       (is (true? (:running? gw)))
-      (is (= "" (:msg-buffer gw))))))
+      (is (= "" (:msg-buffer gw)))))
+  (testing "reset-gateway-state! increments connection-id"
+    (state/init-state! {:failure-threshold 3})
+    (is (= 0 (state/get-connection-id)))
+    (state/reset-gateway-state!)
+    (is (= 1 (state/get-connection-id)))
+    (state/reset-gateway-state!)
+    (is (= 2 (state/get-connection-id)))))
 
 (deftest test-shutdown
   (testing "shutdown! sets shutdown flag"

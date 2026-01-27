@@ -9,7 +9,8 @@
   [config]
   {:gateway {:seq nil
              :running? true
-             :msg-buffer ""}
+             :msg-buffer ""
+             :connection-id 0}
    :monitor {:last-status nil
              :failure-count 0
              :failure-threshold (:failure-threshold config)}
@@ -62,12 +63,22 @@
     (swap! app-state assoc-in [:gateway :msg-buffer] "")
     result))
 
-(defn reset-gateway-state!
-  "Reset gateway state to initial values for reconnection."
+(defn get-connection-id
+  "Get current gateway connection ID."
   []
-  (swap! app-state assoc :gateway {:seq nil
-                                   :running? true
-                                   :msg-buffer ""}))
+  (get-in @app-state [:gateway :connection-id]))
+
+(defn reset-gateway-state!
+  "Reset gateway state to initial values for reconnection.
+   Increments connection-id to invalidate old heartbeat loops."
+  []
+  (swap! app-state
+         (fn [state]
+           (let [new-id (inc (get-in state [:gateway :connection-id] 0))]
+             (assoc state :gateway {:seq nil
+                                    :running? true
+                                    :msg-buffer ""
+                                    :connection-id new-id})))))
 
 ;; Monitor state accessors
 
