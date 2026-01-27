@@ -181,5 +181,21 @@
                      (is (= 123 (:d @heartbeat-payload))
                          "Response should include current sequence number"))))))
 
+(deftest test-handle-hello-sends-identify-before-heartbeat
+  (testing "handle-hello sends IDENTIFY before starting heartbeat loop"
+    (let [send-order (atom [])
+          mock-ws-client (reify Object)]
+      (state/init-state! {:failure-threshold 3})
+      (with-redefs [gateway/send-json (fn [_ payload]
+                                        (swap! send-order conj (:op payload)))
+                    ;; Mock start-heartbeat to track when it's called
+                    gateway/start-heartbeat (fn [_ _]
+                                              (swap! send-order conj :heartbeat-loop-started)
+                                              nil)]
+                   (#'gateway/handle-hello mock-ws-client "test-token" {:heartbeat_interval 5000})
+        ;; IDENTIFY (op=2) should be sent before heartbeat loop starts
+                   (is (= [2 :heartbeat-loop-started] @send-order)
+                       "IDENTIFY should be sent before heartbeat loop starts")))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
