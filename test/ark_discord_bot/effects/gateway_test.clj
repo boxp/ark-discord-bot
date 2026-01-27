@@ -128,5 +128,35 @@
                         "token" (fn [_]) nil nil)]
       (is (fn? reconnect-fn)))))
 
+(deftest test-start-heartbeat-sends-immediately
+  (testing "start-heartbeat sends first heartbeat immediately (not after interval)"
+    (let [send-times (atom [])
+          start-time (atom nil)
+          mock-ws-client (reify Object)
+          interval-ms 5000]  ;; 5 second interval
+      (state/init-state! {:failure-threshold 3})
+      (reset! start-time (System/currentTimeMillis))
+      ;; Mock send-json to record when it's called
+      (with-redefs [gateway/send-json (fn [_ _]
+                                        (swap! send-times conj
+                                               (- (System/currentTimeMillis)
+                                                  @start-time)))]
+                   (let [_ (#'gateway/start-heartbeat mock-ws-client interval-ms)]
+          ;; Wait a bit for the first heartbeat
+                     (Thread/sleep 200)
+          ;; Stop the loop
+                     (state/set-gateway-running! false)
+          ;; First heartbeat should be sent within 200ms, not after 5000ms
+                     (is (seq @send-times) "At least one heartbeat should be sent")
+                     (when (seq @send-times)
+                       (is (< (first @send-times) 200)
+                           "First heartbeat should be sent immediately (within 200ms)")))))))
+
+(deftest test-build-heartbeat
+  (testing "build-heartbeat creates correct payload"
+    (let [payload (#'gateway/build-heartbeat 42)]
+      (is (= 1 (:op payload)))  ;; HEARTBEAT opcode
+      (is (= 42 (:d payload))))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
