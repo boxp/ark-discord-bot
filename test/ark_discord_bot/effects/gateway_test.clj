@@ -85,22 +85,32 @@
       (is (false? (state/gateway-running?))))))
 
 (deftest test-create-close-handler-normal-close
-  (testing "close handler with code 1000 does not trigger reconnect"
+  (testing "close handler with code 1000 triggers reconnect when not shutdown"
     (let [reconnect-called (atom false)
           reconnect-fn (fn [] (reset! reconnect-called true))
           handler (gateway/create-close-handler reconnect-fn)]
       (state/init-state! {:failure-threshold 3})
       (handler nil 1000 "Normal closure")
       (Thread/sleep 100)
+      (is (true? @reconnect-called))))
+  (testing "close handler with code 1000 does not trigger reconnect when shutdown"
+    (let [reconnect-called (atom false)
+          reconnect-fn (fn [] (reset! reconnect-called true))
+          handler (gateway/create-close-handler reconnect-fn)]
+      (state/init-state! {:failure-threshold 3})
+      (state/shutdown!)
+      (handler nil 1000 "Normal closure")
+      (Thread/sleep 100)
       (is (false? @reconnect-called)))))
 
 (deftest test-should-reconnect?
-  (testing "should-reconnect? returns false for code 1000"
-    (is (false? (#'gateway/should-reconnect? 1000))))
-  (testing "should-reconnect? returns true for code 1006"
-    (is (true? (#'gateway/should-reconnect? 1006))))
-  (testing "should-reconnect? returns true for code 4000"
-    (is (true? (#'gateway/should-reconnect? 4000)))))
+  (testing "should-reconnect? returns true when not shutdown"
+    (state/init-state! {:failure-threshold 3})
+    (is (true? (#'gateway/should-reconnect?))))
+  (testing "should-reconnect? returns false when shutdown"
+    (state/init-state! {:failure-threshold 3})
+    (state/shutdown!)
+    (is (false? (#'gateway/should-reconnect?)))))
 
 (deftest test-calculate-backoff
   (testing "calculate-backoff returns initial delay for attempt 0"

@@ -99,11 +99,10 @@
 (def ^:private reconnect-max-delay-ms 60000)
 
 (defn- should-reconnect?
-  "Check if we should attempt reconnection based on close code.
-   Code 1000 = normal closure (no reconnect).
-   Code 1006 = abnormal closure (reconnect)."
-  [code]
-  (not= code 1000))
+  "Check if we should attempt reconnection.
+   Returns false if system is shutting down, true otherwise."
+  []
+  (not (state/system-shutdown?)))
 
 (defn calculate-backoff
   "Calculate exponential backoff delay for reconnection attempt."
@@ -121,7 +120,7 @@
      (state/set-gateway-running! false)
      (println (str "[info] [gateway] Connection closed: code=" code
                    ", reason=" reason))
-     (when (and on-reconnect (should-reconnect? code))
+     (when (and on-reconnect (should-reconnect?))
        (println "[info] [gateway] Scheduling reconnection...")
        (future (on-reconnect))))))
 
