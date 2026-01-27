@@ -4,5 +4,23 @@
     "methods": [
       {"name": "<init>", "parameterTypes": ["java.lang.Runnable"]}
     ]
+  },
+  {
+    "name": "java.net.Socket",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String", "int"]}
+    ]
+  },
+  {
+    "name": "java.io.DataInputStream",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.io.InputStream"]}
+    ]
+  },
+  {
+    "name": "java.io.DataOutputStream",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.io.OutputStream"]}
+    ]
   }
 ]
