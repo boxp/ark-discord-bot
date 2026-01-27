@@ -178,6 +178,12 @@
   (println "[error] [gateway] Invalid session - check bot token")
   (state/set-gateway-running! false))
 
+(defn- handle-heartbeat-request
+  "Handle HEARTBEAT opcode - respond immediately with heartbeat.
+   Discord server may request immediate heartbeat to verify client is alive."
+  [ws-client]
+  (send-json ws-client (build-heartbeat (state/get-gateway-seq))))
+
 (defn- process-gateway-message
   "Process a single gateway message by opcode."
   [ws token data on-message on-interaction on-ready]
@@ -187,6 +193,7 @@
                   (when event-type (str ", event=" event-type))))
     (cond
       (= op (:hello opcodes)) (handle-hello ws token (:d data))
+      (= op (:heartbeat opcodes)) (handle-heartbeat-request ws)
       (= op (:dispatch opcodes)) (handle-dispatch data event-type on-message
                                                   on-interaction on-ready)
       (= op (:invalid-session opcodes)) (handle-invalid-session)
