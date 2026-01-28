@@ -287,19 +287,21 @@
   (println "[info] [gateway] Event loop stopping...")
   (async/put! heartbeat-control-chan :stop))
 
-(defn- drain-and-close-heartbeat-chan [heartbeat-chan]
-  (async/close! heartbeat-chan)
-  (loop [] (when (async/poll! heartbeat-chan) (recur))))
+(defn- drain-and-close-chan [chan]
+  (async/close! chan)
+  (loop [] (when (async/poll! chan) (recur))))
 
 (defn- handle-close-event [heartbeat-control-chan token on-message on-interaction on-ready]
-  (drain-and-close-heartbeat-chan heartbeat-control-chan)
+  (drain-and-close-chan heartbeat-control-chan)
   (state/set-gateway-running! false)
   (when-not (state/system-shutdown?)
-    (let [channels (state/get-gateway-channels)
-          new-hb-chan (async/chan 1)
-          new-channels (assoc channels :heartbeat new-hb-chan)]
-      (state/set-gateway-channels! new-channels)
-      (schedule-reconnect token on-message on-interaction on-ready new-channels 0))))
+    (let [channels (state/get-gateway-channels)]
+      (drain-and-close-chan (:ws-events channels))
+      (let [new-channels {:ws-events (async/chan 100)
+                          :control (:control channels)
+                          :heartbeat (async/chan 1)}]
+        (state/set-gateway-channels! new-channels)
+        (schedule-reconnect token on-message on-interaction on-ready new-channels 0)))))
 
 (defn- handle-ws-event [ws-event ws-client token on-message on-interaction on-ready hb-chan]
   (case (:type ws-event)

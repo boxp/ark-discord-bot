@@ -170,8 +170,12 @@
           control-chan (async/chan)
           heartbeat-control-chan (async/chan)
           reconnect-triggered (atom false)
-          mock-ws-client (reify Object)]
+          mock-ws-client (reify Object)
+          channels {:ws-events ws-events-chan
+                    :control control-chan
+                    :heartbeat heartbeat-control-chan}]
       (state/init-state! {:failure-threshold 3})
+      (state/set-gateway-channels! channels)
       ;; Start event loop with custom reconnect behavior
       (with-redefs [gateway/schedule-reconnect (fn [_ _ _ _ _ _]
                                                  (reset! reconnect-triggered true))]
@@ -184,7 +188,7 @@
                    (Thread/sleep 50)
         ;; Verify reconnect was triggered
                    (is @reconnect-triggered "Reconnect should be triggered on close"))
-      ;; Cleanup
+      ;; Cleanup - channels may have been replaced, close originals
       (async/close! ws-events-chan)
       (async/close! control-chan)
       (async/close! heartbeat-control-chan))))
