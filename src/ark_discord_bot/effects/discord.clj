@@ -1,7 +1,9 @@
 (ns ark-discord-bot.effects.discord
-    "Discord HTTP API client for sending messages and embeds."
+    "Discord HTTP API client for sending messages and embeds.
+   All HTTP functions return core.async channels."
     (:require [babashka.http-client :as http]
-              [cheshire.core :as json]))
+              [cheshire.core :as json]
+              [clojure.core.async :as async]))
 
 (def ^:private api-base "https://discord.com/api/v10")
 
@@ -33,8 +35,8 @@
     :error "🔴 ARKサーバーでエラーが発生しました！ログを確認してください。"
     (str "❓ 不明なサーバーステータス: " (name status))))
 
-(defn- send-request
-  "Send HTTP request to Discord API."
+(defn- send-request-impl
+  "Send HTTP request to Discord API (synchronous implementation)."
   [client method path body]
   (let [url (str api-base path)
         opts {:headers {"Authorization" (str "Bot " (:token client))
@@ -44,6 +46,12 @@
     (case method
       :post (http/post url opts)
       :get (http/get url opts))))
+
+(defn- send-request
+  "Send HTTP request to Discord API. Returns a channel."
+  [client method path body]
+  (async/thread
+    (send-request-impl client method path body)))
 
 (defn send-message
   "Send a text message to a channel.
@@ -132,11 +140,12 @@
                    {:embeds [embed] :components components}))))
 
 (defn respond-to-interaction
-  "Respond to a Discord interaction.
+  "Respond to a Discord interaction. Returns a channel.
    Note: Bot token not needed for interaction responses."
   [_token interaction-id interaction-token response]
-  (let [url (str api-base "/interactions/" interaction-id "/"
-                 interaction-token "/callback")]
-    (http/post url {:headers {"Content-Type" "application/json"}
-                    :body (json/generate-string response)
-                    :throw false})))
+  (async/thread
+    (let [url (str api-base "/interactions/" interaction-id "/"
+                   interaction-token "/callback")]
+      (http/post url {:headers {"Content-Type" "application/json"}
+                      :body (json/generate-string response)
+                      :throw false}))))

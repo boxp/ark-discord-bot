@@ -9,7 +9,8 @@
               [ark-discord-bot.effects.gateway :as gateway]
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
-              [ark-discord-bot.state :as state])
+              [ark-discord-bot.state :as state]
+              [clojure.core.async :as async :refer [go-loop alt! timeout <!!]])
     (:gen-class))
 
 (defn- log
@@ -21,14 +22,14 @@
   "Safely disconnect RCON client, ignoring errors."
   [client]
   (when client
-    (try (rcon/disconnect client) (catch Exception _))))
+    (try (<!! (rcon/disconnect client)) (catch Exception _))))
 
 (defn- fetch-players-via-rcon
   "Connect to RCON and fetch player list."
   [rcon-client timeout-ms]
-  (let [connected-client (rcon/connect rcon-client timeout-ms)]
+  (let [connected-client (<!! (rcon/connect rcon-client timeout-ms))]
     (try
-      (let [players (rcon/parse-listplayers (rcon/execute connected-client "ListPlayers"))]
+      (let [players (rcon/parse-listplayers (<!! (rcon/execute connected-client "ListPlayers")))]
         {:connected true :players players})
       (finally
         (safe-disconnect connected-client)))))
@@ -47,7 +48,7 @@
   "Perform full status check."
   [k8s-client rcon-client config]
   (let [k8s-result (try
-                     (k8s/get-deployment-status k8s-client)
+                     (<!! (k8s/get-deployment-status k8s-client))
                      (catch Exception e
                        {:error (.getMessage e)}))
         rcon-result (when (:available? k8s-result)
@@ -88,21 +89,20 @@
 (defn- execute-restart-confirm
   "Execute the restart confirmation action."
   [token interaction-id interaction-token k8s-client]
-  (discord/respond-to-interaction
-   token interaction-id interaction-token
-   (discord/build-interaction-update "🔄 ARKサーバーの再起動を開始しています..."))
-  (try
-    (k8s/restart-deployment k8s-client)
-    (log :info "Server restart initiated successfully")
-    (catch Exception e
-      (log :error (str "Failed to restart: " (.getMessage e))))))
+  (<!! (discord/respond-to-interaction
+        token interaction-id interaction-token
+        (discord/build-interaction-update "🔄 ARKサーバーの再起動を開始しています...")))
+  (let [result (<!! (k8s/restart-deployment k8s-client))]
+    (if (:error result)
+      (log :error (str "Failed to restart: " (.getMessage (:error result))))
+      (log :info "Server restart initiated successfully"))))
 
 (defn- execute-restart-cancel
   "Execute the restart cancel action."
   [token interaction-id interaction-token]
-  (discord/respond-to-interaction
-   token interaction-id interaction-token
-   (discord/build-interaction-update "❌ ARKサーバーの再起動がキャンセルされました。")))
+  (<!! (discord/respond-to-interaction
+        token interaction-id interaction-token
+        (discord/build-interaction-update "❌ ARKサーバーの再起動がキャンセルされました。"))))
 
 (defn- handle-interaction
   "Handle Discord interaction (button clicks, etc.)."
@@ -139,17 +139,16 @@
       (catch Exception e
         (log :error (str "Command error: " (.getMessage e)))))))
 
-(defn- create-message-handler
-  "Create message handler for gateway events."
-  [discord-client k8s-client rcon-client config]
-  (fn [msg]
-    (let [{:keys [content channel_id author]} msg
-          is-bot? (:bot author)]
-      (when-not is-bot?
-        (log-command-message content)
-        (warn-empty-content content is-bot?)
-        (try-execute-command content discord-client k8s-client
-                             rcon-client config channel_id)))))
+(defn- handle-message-event
+  "Handle MESSAGE_CREATE event from gateway."
+  [msg discord-client k8s-client rcon-client config]
+  (let [{:keys [content channel_id author]} msg
+        is-bot? (:bot author)]
+    (when-not is-bot?
+      (log-command-message content)
+      (warn-empty-content content is-bot?)
+      (try-execute-command content discord-client k8s-client
+                           rcon-client config channel_id))))
 
 (defn- calculate-projected-count
   "Calculate projected failure count after status update."
@@ -182,44 +181,50 @@
   (when (not (k8s/is-transient-error? e))
     (log :error (str "Monitor error: " (.getMessage e)))))
 
+(defn- should-continue-monitor? [alt-result]
+  (and (not= :control (first alt-result))
+       (not (state/system-shutdown?))))
+
 (defn- start-monitor-loop
-  "Start background monitoring loop.
-   Returns the future for the monitor loop."
+  "Start background monitoring loop using core.async.
+   Returns the control channel for stopping the loop."
   [discord-client k8s-client rcon-client config]
-  (future
-   (loop []
-     (when-not (state/system-shutdown?)
-       (Thread/sleep (:monitor-interval config))
-       (when-not (state/system-shutdown?)
-         (try
-           (execute-monitor-cycle discord-client k8s-client rcon-client config)
-           (catch Exception e (handle-monitor-error e))))
-       (recur)))))
+  (let [control-chan (async/chan 1)]
+    (go-loop []
+      (let [result (alt! (timeout (:monitor-interval config)) [:timeout]
+                         control-chan ([v] [:control v]))]
+        (when (should-continue-monitor? result)
+          (try
+            (execute-monitor-cycle discord-client k8s-client rcon-client config)
+            (catch Exception e (handle-monitor-error e)))
+          (recur))))
+    control-chan))
 
-(defn- create-interaction-handler
-  "Create interaction handler for button clicks."
-  [token k8s-client]
-  (fn [interaction-data]
-    (try
-      (handle-interaction interaction-data token k8s-client)
-      (catch Exception e
-        (log :error (str "Interaction error: " (.getMessage e)))))))
+(defn- handle-interaction-event
+  "Handle INTERACTION_CREATE event from gateway."
+  [interaction-data token k8s-client]
+  (try
+    (handle-interaction interaction-data token k8s-client)
+    (catch Exception e
+      (log :error (str "Interaction error: " (.getMessage e))))))
 
-(defn- create-ready-handler
-  "Create handler for READY event."
-  []
-  (fn [data]
-    (let [user (:user data)
-          username (:username user)]
-      (log :info (str "Connected to Discord as: " username))
-      (log :info "Bot is now ready to receive messages"))))
+(defn- handle-ready-event
+  "Handle READY event from gateway."
+  [data]
+  (let [user (:user data)
+        username (:username user)]
+    (log :info (str "Connected to Discord as: " username))
+    (log :info "Bot is now ready to receive messages")))
 
 (defn- shutdown-hook
   "Shutdown hook to cleanup resources."
   []
   (log :info "Shutting down...")
   (state/shutdown!)
-  (when-let [f (state/get-monitor-future)] (future-cancel f))
+  ;; Stop monitor loop by sending signal to control channel
+  (when-let [control-chan (state/get-monitor-control-chan)]
+    (async/put! control-chan :stop)
+    (async/close! control-chan))
   ;; Shutdown gateway (closes WebSocket and channels)
   (gateway/shutdown!)
   (log :info "Shutdown complete."))
@@ -233,25 +238,48 @@
    :rcon (rcon/create-client (:rcon-host config) (:rcon-port config)
                              (:rcon-password config))})
 
-(defn- create-handlers
-  "Create message and interaction handlers."
-  [clients config]
-  {:msg-handler (create-message-handler (:discord clients) (:k8s clients)
-                                        (:rcon clients) config)
-   :interaction-handler (create-interaction-handler (:discord-token config)
-                                                    (:k8s clients))})
+(defn- dispatch-message [event clients config]
+  (handle-message-event (:data event) (:discord clients) (:k8s clients) (:rcon clients) config))
+
+(defn- dispatch-gateway-event
+  "Dispatch gateway event to appropriate handler."
+  [event clients config]
+  (case (:type event)
+    :message (dispatch-message event clients config)
+    :interaction (handle-interaction-event (:data event) (:discord-token config) (:k8s clients))
+    :ready (handle-ready-event (:data event))
+    nil))
+
+(defn- should-continue-event-loop? [event ch]
+  (not (or (nil? event) (= :control (first [event ch])) (state/system-shutdown?))))
+
+(defn- process-gateway-event [event ch clients config]
+  (try
+    (dispatch-gateway-event (second [event ch]) clients config)
+    (catch Exception e
+      (log :error (str "Event processing error: " (.getMessage e))))))
+
+(defn- start-gateway-event-loop
+  "Start event loop to process gateway events. Returns control channel."
+  [app-events-chan clients config]
+  (let [control-chan (async/chan 1)]
+    (go-loop []
+      (let [[event ch] (alt! app-events-chan ([e] [:event e]) control-chan ([v] [:control v]))]
+        (when (should-continue-event-loop? event ch)
+          (process-gateway-event event ch clients config)
+          (recur))))
+    control-chan))
 
 (defn- start-services
-  "Start monitor loop and gateway connection."
-  [clients config handlers]
+  "Start monitor loop and gateway connection.
+   Returns gateway event loop control channel."
+  [clients config]
   (log :info "Starting monitor loop...")
-  (state/set-monitor-future!
+  (state/set-monitor-control-chan!
    (start-monitor-loop (:discord clients) (:k8s clients) (:rcon clients) config))
   (log :info "Connecting to Discord Gateway...")
-  ;; connect now returns channels map, ws-client is stored internally
-  (gateway/connect (:discord-token config) (:msg-handler handlers)
-                   (:interaction-handler handlers)
-                   (create-ready-handler)))
+  (let [app-events-chan (gateway/connect (:discord-token config))]
+    (start-gateway-event-loop app-events-chan clients config)))
 
 (defn- run-main-loop
   "Wait for shutdown signal."
@@ -267,7 +295,6 @@
   (.addShutdownHook (Runtime/getRuntime) (Thread. shutdown-hook))
   (let [config (config/validate-config (config/load-config))
         _ (state/init-state! config)
-        clients (initialize-clients config)
-        handlers (create-handlers clients config)]
-    (start-services clients config handlers)
+        clients (initialize-clients config)]
+    (start-services clients config)
     (run-main-loop)))

@@ -1,8 +1,10 @@
 (ns ark-discord-bot.effects.kubernetes
-    "Kubernetes API client for managing ARK server deployments."
+    "Kubernetes API client for managing ARK server deployments.
+   All API functions return core.async channels."
     (:require [babashka.fs :as fs]
               [babashka.http-client :as http]
               [cheshire.core :as json]
+              [clojure.core.async :as async]
               [clojure.string :as str]))
 
 (defn- create-http-client
@@ -70,8 +72,8 @@
   (cond-> {:headers headers :throw false}
           (:http-client client) (assoc :client (:http-client client))))
 
-(defn get-deployment-status
-  "Get deployment status from Kubernetes API."
+(defn- get-deployment-status-impl
+  "Get deployment status from Kubernetes API (synchronous implementation)."
   [client]
   (let [token (read-token client)
         opts (request-opts client {"Authorization" (str "Bearer " token)})
@@ -80,6 +82,12 @@
       (parse-deployment-status (json/parse-string (:body resp) true))
       (throw (ex-info "Failed to get deployment"
                       {:status (:status resp) :body (:body resp)})))))
+
+(defn get-deployment-status
+  "Get deployment status from Kubernetes API. Returns a channel."
+  [client]
+  (async/thread
+    (get-deployment-status-impl client)))
 
 (defn- build-restart-patch
   "Build patch payload for restarting deployment."
@@ -96,11 +104,21 @@
                  (assoc :body (json/generate-string patch)))]
     (http/patch (deployment-url client) opts)))
 
-(defn restart-deployment
-  "Restart deployment by patching with new annotation."
+(defn- restart-deployment-impl
+  "Restart deployment by patching with new annotation (synchronous implementation)."
   [client]
   (let [token (read-token client)
         resp (execute-patch client token (build-restart-patch))]
-    (when (not= 200 (:status resp))
-      (throw (ex-info "Failed to restart deployment"
-                      {:status (:status resp) :body (:body resp)})))))
+    (if (= 200 (:status resp))
+      {:success true}
+      {:error (ex-info "Failed to restart deployment"
+                       {:status (:status resp) :body (:body resp)})})))
+
+(defn restart-deployment
+  "Restart deployment by patching with new annotation.
+   Returns a channel with {:success true} or {:error <exception>}."
+  [client]
+  (async/thread
+    (try
+      (restart-deployment-impl client)
+      (catch Exception e {:error e}))))

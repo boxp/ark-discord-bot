@@ -1,6 +1,8 @@
 (ns ark-discord-bot.effects.rcon
-    "RCON client for ARK server communication."
+    "RCON client for ARK server communication.
+   All I/O functions return core.async channels."
     (:require [ark-discord-bot.rcon.protocol :as protocol]
+              [clojure.core.async :as async]
               [clojure.string :as str])
     (:import [java.io DataInputStream DataOutputStream]
              [java.net Socket]))
@@ -35,8 +37,8 @@
     (.flush out)
     (read-response in)))
 
-(defn connect
-  "Connect and authenticate to RCON server."
+(defn- connect-impl
+  "Connect and authenticate to RCON server (synchronous implementation)."
   [client timeout-ms]
   (let [socket (Socket. (:host client) (:port client))]
     (.setSoTimeout socket timeout-ms)
@@ -48,15 +50,27 @@
             (throw (ex-info "RCON auth failed" {:response auth-resp})))
         (assoc client :socket socket)))))
 
-(defn disconnect
-  "Close RCON connection."
+(defn connect
+  "Connect and authenticate to RCON server. Returns a channel."
+  [client timeout-ms]
+  (async/thread
+    (connect-impl client timeout-ms)))
+
+(defn- disconnect-impl
+  "Close RCON connection (synchronous implementation)."
   [client]
   (when-let [socket (:socket client)]
     (.close socket))
   (assoc client :socket nil))
 
-(defn execute
-  "Execute RCON command and return response."
+(defn disconnect
+  "Close RCON connection. Returns a channel."
+  [client]
+  (async/thread
+    (disconnect-impl client)))
+
+(defn- execute-impl
+  "Execute RCON command and return response (synchronous implementation)."
   [client command]
   (when-not (connected? client)
     (throw (ex-info "Not connected" {})))
@@ -64,6 +78,12 @@
                           protocol/SERVERDATA_EXECCOMMAND
                           command)]
     (:body resp)))
+
+(defn execute
+  "Execute RCON command and return response. Returns a channel."
+  [client command]
+  (async/thread
+    (execute-impl client command)))
 
 (defn- parse-player-line
   "Parse a single player line from ListPlayers output."
