@@ -1,9 +1,12 @@
 (ns ark-discord-bot.effects.gateway-test
     "Tests for Discord Gateway."
     (:require [ark-discord-bot.effects.gateway :as gateway]
-              [ark-discord-bot.state :as state]
               [clojure.core.async :as async]
               [clojure.test :refer [deftest is testing]]))
+
+;; Helper to create test gateway state
+(defn- create-test-state []
+  (atom {:seq nil :running? true :connection-id 0 :channels nil :ws-client nil}))
 
 ;; Pure function tests (maintained)
 
@@ -88,10 +91,11 @@
           control-chan (async/chan)
           sent-count (atom 0)
           mock-ws-client (reify Object)
-          send-fn (fn [_ _] (swap! sent-count inc))]
-      (state/init-state! {:failure-threshold 3})
+          send-fn (fn [_ _] (swap! sent-count inc))
+          state-atom (create-test-state)]
       ;; Start heartbeat loop with short interval
-      (#'gateway/start-heartbeat-loop mock-ws-client 50 control-chan send-fn)
+      (#'gateway/start-heartbeat-loop-with-state mock-ws-client 50 control-chan
+                                                 send-fn state-atom)
       ;; Wait for some heartbeats
       (Thread/sleep 120)
       (let [count-before @sent-count]
@@ -114,17 +118,18 @@
           app-events-chan (async/chan 10)
           identify-sent (atom false)
           heartbeat-started (atom false)
-          mock-ws-client (reify Object)]
-      (state/init-state! {:failure-threshold 3})
+          mock-ws-client (reify Object)
+          state-atom (create-test-state)]
       (with-redefs [gateway/send-json (fn [_ payload]
                                         (when (= 2 (:op payload))
                                           (reset! identify-sent true)))
-                    gateway/start-heartbeat-loop (fn [_ _ _ _]
-                                                   (reset! heartbeat-started true))]
+                    gateway/start-heartbeat-loop-with-state
+                    (fn [_ _ _ _ _] (reset! heartbeat-started true))]
         ;; Start event loop
-                   (#'gateway/start-event-loop mock-ws-client "test-token"
-                                               ws-events-chan control-chan heartbeat-control-chan
-                                               app-events-chan)
+                   (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                                          ws-events-chan control-chan
+                                                          heartbeat-control-chan
+                                                          app-events-chan state-atom)
         ;; Send HELLO message
                    (async/>!! ws-events-chan {:type :message
                                               :data {:op 10 :d {:heartbeat_interval 5000}}})
@@ -146,12 +151,13 @@
           control-chan (async/chan)
           heartbeat-control-chan (async/chan)
           app-events-chan (async/chan 10)
-          mock-ws-client (reify Object)]
-      (state/init-state! {:failure-threshold 3})
+          mock-ws-client (reify Object)
+          state-atom (create-test-state)]
       ;; Start event loop
-      (#'gateway/start-event-loop mock-ws-client "test-token"
-                                  ws-events-chan control-chan heartbeat-control-chan
-                                  app-events-chan)
+      (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                             ws-events-chan control-chan
+                                             heartbeat-control-chan
+                                             app-events-chan state-atom)
       ;; Send DISPATCH message
       (async/>!! ws-events-chan {:type :message
                                  :data {:op 0 :t "MESSAGE_CREATE" :s 1
@@ -172,31 +178,30 @@
       (async/close! app-events-chan))))
 
 (deftest test-event-loop-handles-close
-  (testing "close event triggers reconnect when not shutting down"
+  (testing "close event sets running? to false"
     (let [ws-events-chan (async/chan)
           control-chan (async/chan)
           heartbeat-control-chan (async/chan)
           app-events-chan (async/chan 10)
-          reconnect-triggered (atom false)
           mock-ws-client (reify Object)
+          state-atom (create-test-state)
           channels {:ws-events ws-events-chan
                     :control control-chan
                     :heartbeat heartbeat-control-chan
                     :app-events app-events-chan}]
-      (state/init-state! {:failure-threshold 3})
-      (state/set-gateway-channels! channels)
-      ;; Start event loop with custom reconnect behavior
-      (with-redefs [gateway/schedule-reconnect (fn [_ _ _]
-                                                 (reset! reconnect-triggered true))]
-                   (#'gateway/start-event-loop mock-ws-client "test-token"
-                                               ws-events-chan control-chan heartbeat-control-chan
-                                               app-events-chan)
-        ;; Send close event
-                   (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
-        ;; Wait for processing
-                   (Thread/sleep 50)
-        ;; Verify reconnect was triggered
-                   (is @reconnect-triggered "Reconnect should be triggered on close"))
+      (gateway/set-gateway-channels-with-state! state-atom channels)
+      ;; Start event loop
+      (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                             ws-events-chan control-chan
+                                             heartbeat-control-chan
+                                             app-events-chan state-atom)
+      ;; Send close event
+      (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
+      ;; Wait for processing
+      (Thread/sleep 50)
+      ;; Verify running? is false
+      (is (false? (gateway/gateway-running-with-state? state-atom))
+          "Gateway should not be running after close")
       ;; Cleanup - channels may have been replaced, close originals
       (async/close! ws-events-chan)
       (async/close! control-chan)
@@ -210,12 +215,13 @@
           heartbeat-control-chan (async/chan)
           app-events-chan (async/chan 10)
           close-called (atom false)
-          mock-ws-client (reify Object)]
-      (state/init-state! {:failure-threshold 3})
+          mock-ws-client (reify Object)
+          state-atom (create-test-state)]
       (with-redefs [gateway/close-ws! (fn [_] (reset! close-called true))]
-                   (#'gateway/start-event-loop mock-ws-client "test-token"
-                                               ws-events-chan control-chan heartbeat-control-chan
-                                               app-events-chan)
+                   (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                                          ws-events-chan control-chan
+                                                          heartbeat-control-chan
+                                                          app-events-chan state-atom)
         ;; Send RECONNECT opcode
                    (async/>!! ws-events-chan {:type :message :data {:op 7}})
         ;; Wait for processing
@@ -230,24 +236,25 @@
       (async/close! app-events-chan))))
 
 (deftest test-shutdown-stops-all-loops
-  (testing "shutdown! closes channels and stops loops"
-    (let [channels (gateway/create-gateway-channels)]
-      (state/init-state! {:failure-threshold 3})
-      (state/set-gateway-channels! channels)
+  (testing "shutdown-with-state! closes channels and stops loops"
+    (let [channels (gateway/create-gateway-channels)
+          state-atom (create-test-state)]
+      (gateway/set-gateway-channels-with-state! state-atom channels)
       ;; Shutdown
-      (gateway/shutdown!)
+      (gateway/shutdown-with-state! state-atom)
       ;; Wait for channels to close
       (Thread/sleep 50)
       ;; Verify gateway is not running
-      (is (false? (state/gateway-running?))
+      (is (false? (gateway/gateway-running-with-state? state-atom))
           "Gateway should not be running after shutdown"))))
 
 (deftest test-reconnect-uses-backoff
   (testing "reconnect waits with exponential backoff"
     (let [wait-times (atom [])
           connect-attempts (atom 0)
-          channels (gateway/create-gateway-channels)]
-      (state/init-state! {:failure-threshold 3})
+          channels (gateway/create-gateway-channels)
+          state-atom (create-test-state)]
+      (gateway/set-gateway-channels-with-state! state-atom channels)
       (with-redefs [gateway/wait-ms (fn [ms] (swap! wait-times conj ms))
                     gateway/establish-websocket (fn [& _]
                                                   (swap! connect-attempts inc)
@@ -255,9 +262,9 @@
                                                     (throw (Exception. "Test failure")))
                                                   ;; Success on 3rd attempt
                                                   :mock-ws)
-                    gateway/start-event-loop (fn [& _] nil)]
-        ;; Trigger reconnect
-                   (#'gateway/reconnect-with-backoff "token" channels 0)
+                    gateway/start-event-loop-with-state (fn [& _] nil)]
+        ;; Trigger reconnect (use blocking reconnect for predictable timing)
+                   (#'gateway/reconnect-with-backoff-with-state "token" channels 0 state-atom)
         ;; Verify backoff delays (first 2 attempts fail, 3rd succeeds)
                    (is (= [1000 2000 4000] @wait-times)
                        "Should use exponential backoff"))

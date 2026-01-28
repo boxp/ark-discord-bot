@@ -1,0 +1,26 @@
+;; Integrant system configuration for ARK Discord Bot
+{:ark/config {}
+
+ :ark/discord-client {:config #ig/ref :ark/config}
+ :ark/k8s-client {:config #ig/ref :ark/config}
+ :ark/rcon-client {:config #ig/ref :ark/config}
+
+ :ark/gateway-state {}
+ :ark/gateway {:config #ig/ref :ark/config
+               :gateway-state #ig/ref :ark/gateway-state}
+
+ :ark/monitor-state {:config #ig/ref :ark/config}
+
+ :ark/monitor-loop
+ {:discord-client #ig/ref :ark/discord-client
+  :k8s-client #ig/ref :ark/k8s-client
+  :rcon-client #ig/ref :ark/rcon-client
+  :monitor-state #ig/ref :ark/monitor-state
+  :config #ig/ref :ark/config}
+
+ :ark/gateway-event-loop
+ {:gateway #ig/ref :ark/gateway
+  :discord-client #ig/ref :ark/discord-client
+  :k8s-client #ig/ref :ark/k8s-client
+  :rcon-client #ig/ref :ark/rcon-client
+  :config #ig/ref :ark/config}}
