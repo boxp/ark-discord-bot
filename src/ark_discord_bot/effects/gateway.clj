@@ -295,11 +295,9 @@
   (drain-and-close-chan heartbeat-control-chan)
   (state/set-gateway-running! false)
   (when-not (state/system-shutdown?)
-    (let [channels (state/get-gateway-channels)]
-      (drain-and-close-chan (:ws-events channels))
-      (let [new-channels {:ws-events (async/chan 100)
-                          :control (:control channels)
-                          :heartbeat (async/chan 1)}]
+    (let [old-channels (state/get-gateway-channels)]
+      (drain-and-close-chan (:ws-events old-channels))
+      (let [new-channels (create-gateway-channels)]
         (state/set-gateway-channels! new-channels)
         (schedule-reconnect token on-message on-interaction on-ready new-channels 0)))))
 
