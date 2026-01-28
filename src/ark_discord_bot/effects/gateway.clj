@@ -158,15 +158,19 @@
   "Attempt a single reconnection. Returns :success or :failure."
   [token on-message on-interaction on-ready make-reconnect-fn]
   (println "[debug] [gateway] Attempting reconnection...")
+  (flush)
   (try
     (let [ws-client (connect-internal token on-message on-interaction
                                       on-ready (make-reconnect-fn))]
       (state/set-ws-client! ws-client)
       (println "[info] [gateway] Reconnection initiated successfully")
+      (flush)
       :success)
-    (catch Exception e
-      (println (str "[error] [gateway] Reconnect failed: " (type e)
-                    " - " (.getMessage e)))
+    (catch Throwable t
+      (println (str "[error] [gateway] Reconnect failed: " (type t)
+                    " - " (.getMessage t)))
+      (.printStackTrace t)
+      (flush)
       :failure)))
 
 (defn create-reconnect-fn
@@ -177,10 +181,17 @@
                                                 on-interaction on-ready)]
     (fn []
       (loop [attempt 0]
+        (println (str "[debug] [gateway] Reconnect loop iteration, attempt=" attempt
+                      ", shutdown?=" (state/system-shutdown?)))
+        (flush)
         (when-not (state/system-shutdown?)
           (wait-before-reconnect attempt)
+          (println "[debug] [gateway] After sleep, calling attempt-reconnect...")
+          (flush)
           (let [result (attempt-reconnect token on-message on-interaction
                                           on-ready make-reconnect-fn)]
+            (println (str "[debug] [gateway] attempt-reconnect returned: " result))
+            (flush)
             (when (= result :failure)
               (recur (inc attempt)))))))))
 
