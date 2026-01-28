@@ -146,6 +146,16 @@
   [monitor-future]
   (swap! app-state assoc-in [:system :monitor-future] monitor-future))
 
+(defn get-monitor-control-chan
+  "Get monitor loop control channel reference."
+  []
+  (get-in @app-state [:system :monitor-control-chan]))
+
+(defn set-monitor-control-chan!
+  "Set monitor loop control channel reference."
+  [control-chan]
+  (swap! app-state assoc-in [:system :monitor-control-chan] control-chan))
+
 ;; Config accessors
 
 (defn get-config
