@@ -53,14 +53,19 @@
       (is (= :new-ws (:ws-client @state-atom))))))
 
 (deftest reset-gateway-state-with-state!-test
-  (testing "reset-gateway-state-with-state! resets state and increments connection-id"
+  (testing "resets state, increments connection-id, clears shutdown-requested"
     (let [channels {:ws-events :chan1}
-          state-atom (atom {:seq 42 :running? false :connection-id 5 :channels channels})]
+          state-atom (atom {:seq 42
+                            :running? false
+                            :connection-id 5
+                            :channels channels
+                            :shutdown-requested? true})]
       (gateway/reset-gateway-state-with-state! state-atom)
       (is (nil? (:seq @state-atom)))
       (is (true? (:running? @state-atom)))
       (is (= 6 (:connection-id @state-atom)))
-      (is (= channels (:channels @state-atom))))))
+      (is (= channels (:channels @state-atom)))
+      (is (false? (:shutdown-requested? @state-atom))))))
 
 (deftest system-shutdown-with-state?-test
   (testing "system-shutdown-with-state? returns inverse of running?"
@@ -68,3 +73,16 @@
       (is (false? (gateway/system-shutdown-with-state? state-atom)))
       (swap! state-atom assoc :running? false)
       (is (true? (gateway/system-shutdown-with-state? state-atom))))))
+
+(deftest shutdown-requested-with-state?-test
+  (testing "shutdown-requested-with-state? returns shutdown-requested? from state"
+    (let [state-atom (atom {:shutdown-requested? false})]
+      (is (false? (gateway/shutdown-requested-with-state? state-atom)))
+      (swap! state-atom assoc :shutdown-requested? true)
+      (is (true? (gateway/shutdown-requested-with-state? state-atom))))))
+
+(deftest set-shutdown-requested-with-state!-test
+  (testing "set-shutdown-requested-with-state! updates shutdown-requested?"
+    (let [state-atom (atom {:shutdown-requested? false})]
+      (gateway/set-shutdown-requested-with-state! state-atom true)
+      (is (true? (:shutdown-requested? @state-atom))))))

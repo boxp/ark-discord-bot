@@ -6,7 +6,12 @@
 
 ;; Helper to create test gateway state
 (defn- create-test-state []
-  (atom {:seq nil :running? true :connection-id 0 :channels nil :ws-client nil}))
+  (atom {:seq nil
+         :running? true
+         :connection-id 0
+         :channels nil
+         :ws-client nil
+         :shutdown-requested? false}))
 
 ;; Pure function tests (maintained)
 
@@ -177,12 +182,13 @@
       (async/close! heartbeat-control-chan)
       (async/close! app-events-chan))))
 
-(deftest test-event-loop-handles-close
-  (testing "close event sets running? to false"
+(deftest test-event-loop-handles-close-triggers-reconnect
+  (testing "close event triggers reconnection (running? stays true)"
     (let [ws-events-chan (async/chan)
           control-chan (async/chan)
           heartbeat-control-chan (async/chan)
           app-events-chan (async/chan 10)
+          reconnect-called (atom false)
           mock-ws-client (reify Object)
           state-atom (create-test-state)
           channels {:ws-events ws-events-chan
@@ -190,19 +196,57 @@
                     :heartbeat heartbeat-control-chan
                     :app-events app-events-chan}]
       (gateway/set-gateway-channels-with-state! state-atom channels)
-      ;; Start event loop
-      (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
-                                             ws-events-chan control-chan
-                                             heartbeat-control-chan
-                                             app-events-chan state-atom)
-      ;; Send close event
-      (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
-      ;; Wait for processing
-      (Thread/sleep 50)
-      ;; Verify running? is false
-      (is (false? (gateway/gateway-running-with-state? state-atom))
-          "Gateway should not be running after close")
-      ;; Cleanup - channels may have been replaced, close originals
+      (with-redefs [gateway/schedule-reconnect-with-state
+                    (fn [& _] (reset! reconnect-called true))]
+        ;; Start event loop
+                   (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                                          ws-events-chan control-chan
+                                                          heartbeat-control-chan
+                                                          app-events-chan state-atom)
+        ;; Send close event
+                   (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
+        ;; Wait for processing
+                   (Thread/sleep 50)
+        ;; Verify reconnect was scheduled (not shutdown)
+                   (is @reconnect-called
+                       "Reconnect should be scheduled on normal close"))
+      ;; Cleanup
+      (async/close! ws-events-chan)
+      (async/close! control-chan)
+      (async/close! heartbeat-control-chan)
+      (async/close! app-events-chan))))
+
+(deftest test-event-loop-handles-close-during-shutdown
+  (testing "close event does NOT trigger reconnect when shutdown-requested"
+    (let [ws-events-chan (async/chan)
+          control-chan (async/chan)
+          heartbeat-control-chan (async/chan)
+          app-events-chan (async/chan 10)
+          reconnect-called (atom false)
+          mock-ws-client (reify Object)
+          state-atom (create-test-state)
+          channels {:ws-events ws-events-chan
+                    :control control-chan
+                    :heartbeat heartbeat-control-chan
+                    :app-events app-events-chan}]
+      (gateway/set-gateway-channels-with-state! state-atom channels)
+      ;; Set shutdown-requested? to true (simulating explicit shutdown)
+      (gateway/set-shutdown-requested-with-state! state-atom true)
+      (with-redefs [gateway/schedule-reconnect-with-state
+                    (fn [& _] (reset! reconnect-called true))]
+        ;; Start event loop
+                   (#'gateway/start-event-loop-with-state mock-ws-client "test-token"
+                                                          ws-events-chan control-chan
+                                                          heartbeat-control-chan
+                                                          app-events-chan state-atom)
+        ;; Send close event
+                   (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
+        ;; Wait for processing
+                   (Thread/sleep 50)
+        ;; Verify reconnect was NOT scheduled during shutdown
+                   (is (false? @reconnect-called)
+                       "Reconnect should NOT be scheduled during shutdown"))
+      ;; Cleanup
       (async/close! ws-events-chan)
       (async/close! control-chan)
       (async/close! heartbeat-control-chan)

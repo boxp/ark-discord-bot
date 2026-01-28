@@ -7,4 +7,5 @@
                   :running? true
                   :connection-id 0
                   :channels nil
-                  :ws-client nil}))
+                  :ws-client nil
+                  :shutdown-requested? false}))

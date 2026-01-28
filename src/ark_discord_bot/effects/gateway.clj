@@ -151,7 +151,7 @@
 (defn reset-gateway-state-with-state!
   "Reset gateway state to initial values for reconnection.
    Increments connection-id to invalidate old heartbeat loops.
-   Preserves channels."
+   Preserves channels. Clears shutdown-requested flag."
   [state-atom]
   (swap! state-atom
          (fn [s]
@@ -161,12 +161,23 @@
                     :seq nil
                     :running? true
                     :connection-id new-id
-                    :channels channels)))))
+                    :channels channels
+                    :shutdown-requested? false)))))
 
 (defn system-shutdown-with-state?
   "Check if system is shutting down (running? is false)."
   [state-atom]
   (not (:running? @state-atom)))
+
+(defn shutdown-requested-with-state?
+  "Check if explicit shutdown was requested."
+  [state-atom]
+  (:shutdown-requested? @state-atom))
+
+(defn set-shutdown-requested-with-state!
+  "Set the shutdown-requested flag."
+  [state-atom requested?]
+  (swap! state-atom assoc :shutdown-requested? requested?))
 
 ;; WebSocket handlers that push to channels
 
@@ -377,17 +388,14 @@
 
 (defn- handle-close-event-with-state [heartbeat-control-chan token state-atom]
   (drain-and-close-chan heartbeat-control-chan)
-  (set-gateway-running-with-state! state-atom false)
-  (when (gateway-running-with-state? state-atom)
+  ;; Only reconnect if shutdown was NOT explicitly requested
+  (when-not (shutdown-requested-with-state? state-atom)
     (let [old-channels (get-gateway-channels-with-state state-atom)]
       (drain-and-close-chan (:ws-events old-channels))
       (let [new-channels (assoc (create-gateway-channels)
                                 :app-events (:app-events old-channels))]
         (set-gateway-channels-with-state! state-atom new-channels)
         (schedule-reconnect-with-state token new-channels 0 state-atom)))))
-
-;; Note: After setting running? to false, gateway-running-with-state? returns false,
-;; so reconnect won't be scheduled during shutdown. This is the intended behavior.
 
 (defn- handle-message-ws-event-with-state
   [ws-event ws-client token hb-chan app-events-chan state-atom]
@@ -497,11 +505,13 @@
 
 (defn shutdown-with-state!
   "Shutdown gateway using provided state atom.
-   1. Sets :running? to false
-   2. Closes WebSocket connection
-   3. Closes all channels"
+   1. Sets :shutdown-requested? to true (prevents reconnection)
+   2. Sets :running? to false
+   3. Closes WebSocket connection
+   4. Closes all channels"
   [state-atom]
   (println "[info] [gateway] Shutting down gateway...")
+  (set-shutdown-requested-with-state! state-atom true)
   (set-gateway-running-with-state! state-atom false)
   (shutdown-ws-client-with-state state-atom)
   (Thread/sleep 100)
