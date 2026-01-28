@@ -93,11 +93,12 @@
 
 (defn create-gateway-channels
   "Create gateway channel set.
-   Returns {:ws-events <chan> :control <chan> :heartbeat <chan>}"
+   Returns {:ws-events <chan> :control <chan> :heartbeat <chan>}
+   Control and heartbeat channels have buffer size 1 to prevent signal loss."
   []
   {:ws-events (async/chan 100)
-   :control (async/chan)
-   :heartbeat (async/chan)})
+   :control (async/chan 1)
+   :heartbeat (async/chan 1)})
 
 ;; WebSocket handlers that push to channels
 
@@ -286,12 +287,19 @@
   (println "[info] [gateway] Event loop stopping...")
   (async/put! heartbeat-control-chan :stop))
 
+(defn- drain-and-close-heartbeat-chan [heartbeat-chan]
+  (async/close! heartbeat-chan)
+  (loop [] (when (async/poll! heartbeat-chan) (recur))))
+
 (defn- handle-close-event [heartbeat-control-chan token on-message on-interaction on-ready]
-  (async/put! heartbeat-control-chan :stop)
+  (drain-and-close-heartbeat-chan heartbeat-control-chan)
   (state/set-gateway-running! false)
   (when-not (state/system-shutdown?)
-    (let [channels (state/get-gateway-channels)]
-      (schedule-reconnect token on-message on-interaction on-ready channels 0))))
+    (let [channels (state/get-gateway-channels)
+          new-hb-chan (async/chan 1)
+          new-channels (assoc channels :heartbeat new-hb-chan)]
+      (state/set-gateway-channels! new-channels)
+      (schedule-reconnect token on-message on-interaction on-ready new-channels 0))))
 
 (defn- handle-ws-event [ws-event ws-client token on-message on-interaction on-ready hb-chan]
   (case (:type ws-event)
@@ -359,25 +367,24 @@
   ([token on-message on-interaction on-ready]
    (connect-internal token on-message on-interaction on-ready)))
 
-(defn- shutdown-control-chan [control-chan]
-  (async/put! control-chan :shutdown)
-  (async/close! control-chan))
-
-(defn- shutdown-heartbeat-chan [heartbeat-chan]
-  (async/put! heartbeat-chan :stop)
-  (async/close! heartbeat-chan))
-
 (defn- shutdown-ws-client []
   (when-let [ws (state/get-ws-client)]
     (try (close-ws! ws) (catch Exception _))))
 
-(defn- shutdown-channels [channels]
-  (when-let [c (:control channels)] (shutdown-control-chan c))
-  (when-let [h (:heartbeat channels)] (shutdown-heartbeat-chan h))
-  (shutdown-ws-client)
-  (when-let [e (:ws-events channels)] (async/close! e)))
+(defn- close-channels-safely [channels]
+  (when-let [c (:control channels)]
+    (async/put! c :shutdown)
+    (async/close! c))
+  (when-let [h (:heartbeat channels)]
+    (async/put! h :stop)
+    (async/close! h))
+  (when-let [e (:ws-events channels)]
+    (async/close! e)))
 
 (defn shutdown! []
   (println "[info] [gateway] Shutting down gateway...")
-  (when-let [channels (state/get-gateway-channels)] (shutdown-channels channels))
-  (state/set-gateway-running! false))
+  (state/set-gateway-running! false)
+  (shutdown-ws-client)
+  (Thread/sleep 100)
+  (when-let [channels (state/get-gateway-channels)]
+    (close-channels-safely channels)))
