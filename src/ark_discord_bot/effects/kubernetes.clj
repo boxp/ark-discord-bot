@@ -109,12 +109,16 @@
   [client]
   (let [token (read-token client)
         resp (execute-patch client token (build-restart-patch))]
-    (when (not= 200 (:status resp))
-      (throw (ex-info "Failed to restart deployment"
-                      {:status (:status resp) :body (:body resp)})))))
+    (if (= 200 (:status resp))
+      {:success true}
+      {:error (ex-info "Failed to restart deployment"
+                       {:status (:status resp) :body (:body resp)})})))
 
 (defn restart-deployment
-  "Restart deployment by patching with new annotation. Returns a channel."
+  "Restart deployment by patching with new annotation.
+   Returns a channel with {:success true} or {:error <exception>}."
   [client]
   (async/thread
-    (restart-deployment-impl client)))
+    (try
+      (restart-deployment-impl client)
+      (catch Exception e {:error e}))))

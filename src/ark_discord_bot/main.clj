@@ -92,11 +92,10 @@
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-interaction-update "🔄 ARKサーバーの再起動を開始しています...")))
-  (try
-    (<!! (k8s/restart-deployment k8s-client))
-    (log :info "Server restart initiated successfully")
-    (catch Exception e
-      (log :error (str "Failed to restart: " (.getMessage e))))))
+  (let [result (<!! (k8s/restart-deployment k8s-client))]
+    (if (:error result)
+      (log :error (str "Failed to restart: " (.getMessage (:error result))))
+      (log :info "Server restart initiated successfully"))))
 
 (defn- execute-restart-cancel
   "Execute the restart cancel action."
@@ -182,15 +181,19 @@
   (when (not (k8s/is-transient-error? e))
     (log :error (str "Monitor error: " (.getMessage e)))))
 
+(defn- should-continue-monitor? [alt-result]
+  (and (not= :control (first alt-result))
+       (not (state/system-shutdown?))))
+
 (defn- start-monitor-loop
   "Start background monitoring loop using core.async.
    Returns the control channel for stopping the loop."
   [discord-client k8s-client rcon-client config]
   (let [control-chan (async/chan 1)]
     (go-loop []
-      (let [[_ ch] (alt! (timeout (:monitor-interval config)) [:timeout]
+      (let [result (alt! (timeout (:monitor-interval config)) [:timeout]
                          control-chan ([v] [:control v]))]
-        (when-not (or (= ch control-chan) (state/system-shutdown?))
+        (when (should-continue-monitor? result)
           (try
             (execute-monitor-cycle discord-client k8s-client rcon-client config)
             (catch Exception e (handle-monitor-error e)))
