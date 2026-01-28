@@ -9,9 +9,10 @@
   :unused-private-var {:level :warning}
   :redundant-do {:level :warning}
   :redundant-let {:level :warning}
-  :single-key-in {:level :off}}
+  :single-key-in {:level :off}
+  :fn-size-limit {:level :warning}}
 
- :hooks {:analyze-call {defn hooks.fn-size/defn-hook
-                        defn- hooks.fn-size/defn-hook}}
+ :hooks {:analyze-call {clojure.core/defn hooks.fn-size/defn-hook
+                        clojure.core/defn- hooks.fn-size/defn-hook}}
 
  :output {:progress true}}
