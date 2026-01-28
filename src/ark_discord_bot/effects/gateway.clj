@@ -101,51 +101,59 @@
 
 ;; WebSocket handlers that push to channels
 
-(defn- create-ws-handlers
-  "Create WebSocket handlers that push events to ws-events channel."
-  [ws-events-chan msg-buffer]
-  {:on-open (fn [_ws]
-              (println "[info] [gateway] WebSocket connection established"))
-   :on-message (fn [_ws msg last?]
-                 (swap! msg-buffer str msg)
-                 (when last?
-                   (try
-                     (let [full-msg @msg-buffer
-                           data (json/parse-string full-msg true)]
-                       (reset! msg-buffer "")
-                       (async/put! ws-events-chan {:type :message :data data}))
-                     (catch Exception e
-                       (reset! msg-buffer "")
-                       (println (str "[error] [gateway] Parse error: " (.getMessage e)))))))
-   :on-close (fn [_ws code reason]
-               (println (str "[info] [gateway] Connection closed: code=" code
-                             ", reason=" reason))
-               (async/put! ws-events-chan {:type :close :code code :reason reason}))
-   :on-error (fn [_ws error]
-               (println (str "[error] [gateway] WebSocket error: "
-                             (.getMessage error)))
-               (async/put! ws-events-chan {:type :error :error error}))})
+(defn- create-on-open-handler []
+  (fn [_ws] (println "[info] [gateway] WebSocket connection established")))
+
+(defn- process-complete-message [ws-events-chan msg-buffer]
+  (let [full-msg @msg-buffer
+        data (json/parse-string full-msg true)]
+    (reset! msg-buffer "")
+    (async/put! ws-events-chan {:type :message :data data})))
+
+(defn- create-on-message-handler [ws-events-chan msg-buffer]
+  (fn [_ws msg last?]
+    (swap! msg-buffer str msg)
+    (when last?
+      (try
+        (process-complete-message ws-events-chan msg-buffer)
+        (catch Exception e
+          (reset! msg-buffer "")
+          (println (str "[error] [gateway] Parse error: " (.getMessage e))))))))
+
+(defn- create-on-close-handler [ws-events-chan]
+  (fn [_ws code reason]
+    (println (str "[info] [gateway] Connection closed: code=" code ", reason=" reason))
+    (async/put! ws-events-chan {:type :close :code code :reason reason})))
+
+(defn- create-on-error-handler [ws-events-chan]
+  (fn [_ws error]
+    (println (str "[error] [gateway] WebSocket error: " (.getMessage error)))
+    (async/put! ws-events-chan {:type :error :error error})))
+
+(defn- create-ws-handlers [ws-events-chan msg-buffer]
+  {:on-open (create-on-open-handler)
+   :on-message (create-on-message-handler ws-events-chan msg-buffer)
+   :on-close (create-on-close-handler ws-events-chan)
+   :on-error (create-on-error-handler ws-events-chan)})
 
 ;; Heartbeat loop
 
-(defn start-heartbeat-loop
-  "Start heartbeat loop using go-loop and alt!.
-   Sends heartbeat every interval-ms, stops on control channel message."
-  [ws-client interval-ms control-chan send-fn]
+(defn- send-heartbeat-safe [ws-client send-fn]
+  (try
+    (send-fn ws-client (build-heartbeat (state/get-gateway-seq)))
+    (catch Exception e
+      (println (str "[error] [gateway] Heartbeat send failed: " (.getMessage e))))))
+
+(defn- should-continue-heartbeat? [alt-result]
+  (and (not= :control (first alt-result))
+       (state/gateway-running?)
+       (not (state/system-shutdown?))))
+
+(defn start-heartbeat-loop [ws-client interval-ms control-chan send-fn]
   (go-loop []
-    ;; Send heartbeat immediately on first iteration
-    (try
-      (send-fn ws-client (build-heartbeat (state/get-gateway-seq)))
-      (catch Exception e
-        (println (str "[error] [gateway] Heartbeat send failed: " (.getMessage e)))))
-    ;; Wait for interval or control message
-    (let [[v ch] (alt!
-                  (timeout interval-ms) [:timeout nil]
-                  control-chan ([v] [:control v]))]
-      (when-not (= :control (first [v ch]))
-        (when (and (state/gateway-running?)
-                   (not (state/system-shutdown?)))
-          (recur))))))
+    (send-heartbeat-safe ws-client send-fn)
+    (let [result (alt! (timeout interval-ms) [:timeout nil] control-chan ([v] [:control v]))]
+      (when (should-continue-heartbeat? result) (recur)))))
 
 ;; Event handlers
 
@@ -185,147 +193,125 @@
   (println "[info] [gateway] Closing connection for reconnect...")
   (close-ws! ws-client))
 
-(defn- process-message
-  "Process a gateway message by opcode."
-  [ws-client token data on-message on-interaction on-ready heartbeat-control-chan]
-  (let [op (:op data)
-        event-type (:t data)]
-    (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                  (when event-type (str ", event=" event-type))))
+(defn- log-gateway-message [op event-type]
+  (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                (when event-type (str ", event=" event-type)))))
+
+(defn- dispatch-by-opcode [ws-client token data op event-type callbacks hb-chan]
+  (let [{:keys [on-message on-interaction on-ready]} callbacks]
     (cond
-      (= op (:hello opcodes))
-      (handle-hello ws-client token (:d data) heartbeat-control-chan)
-
-      (= op (:heartbeat opcodes))
-      (handle-heartbeat-request ws-client)
-
+      (= op (:hello opcodes)) (handle-hello ws-client token (:d data) hb-chan)
+      (= op (:heartbeat opcodes)) (handle-heartbeat-request ws-client)
       (= op (:dispatch opcodes))
       (handle-dispatch data event-type on-message on-interaction on-ready)
+      (= op (:invalid-session opcodes)) (handle-invalid-session)
+      (= op (:reconnect opcodes)) (handle-reconnect ws-client))))
 
-      (= op (:invalid-session opcodes))
-      (handle-invalid-session)
-
-      (= op (:reconnect opcodes))
-      (handle-reconnect ws-client))))
+(defn- process-message [ws-client token data on-message on-interaction on-ready hb-chan]
+  (let [op (:op data) event-type (:t data)]
+    (log-gateway-message op event-type)
+    (dispatch-by-opcode ws-client token data op event-type
+                        {:on-message on-message :on-interaction on-interaction :on-ready on-ready}
+                        hb-chan)))
 
 ;; Reconnect logic
 
 (declare start-event-loop)
 (declare establish-websocket)
 
-(defn schedule-reconnect
-  "Schedule a reconnection attempt with backoff."
-  [token on-message on-interaction on-ready channels attempt]
+(defn- log-reconnect-start [delay-ms attempt]
+  (println (str "[info] [gateway] Reconnecting in " delay-ms "ms (attempt " (inc attempt) ")...")))
+
+(defn- create-reconnect-ws [channels]
+  (let [msg-buffer (atom "") ws-handlers (create-ws-handlers (:ws-events channels) msg-buffer)]
+    (ws/websocket {:uri gateway-url :on-open (:on-open ws-handlers)
+                   :on-message (:on-message ws-handlers) :on-close (:on-close ws-handlers)
+                   :on-error (:on-error ws-handlers)})))
+
+(defn- start-reconnected-session [ws-client token channels on-message on-interaction on-ready]
+  (state/set-ws-client! ws-client)
+  (start-event-loop ws-client token (:ws-events channels) (:control channels)
+                    (:heartbeat channels) on-message on-interaction on-ready)
+  (println "[info] [gateway] Reconnection initiated successfully"))
+
+(defn- log-reconnect-failure [e]
+  (println (str "[error] [gateway] Reconnect failed: " (type e) " - " (.getMessage e))))
+
+(declare schedule-reconnect)
+
+(defn- do-reconnect-attempt [token on-msg on-int on-rdy channels attempt]
+  (try
+    (state/reset-gateway-state!)
+    (let [ws-client (create-reconnect-ws channels)]
+      (start-reconnected-session ws-client token channels on-msg on-int on-rdy))
+    (catch Exception e
+      (log-reconnect-failure e)
+      (schedule-reconnect token on-msg on-int on-rdy channels (inc attempt)))))
+
+(defn schedule-reconnect [token on-msg on-int on-rdy channels attempt]
   (go
     (when-not (state/system-shutdown?)
       (let [delay-ms (calculate-backoff attempt)]
-        (println (str "[info] [gateway] Reconnecting in " delay-ms
-                      "ms (attempt " (inc attempt) ")..."))
+        (log-reconnect-start delay-ms attempt)
         (<! (timeout delay-ms))
         (when-not (state/system-shutdown?)
           (println "[debug] [gateway] Attempting reconnection...")
-          (try
-            (state/reset-gateway-state!)
-            (let [msg-buffer (atom "")
-                  ws-handlers (create-ws-handlers (:ws-events channels) msg-buffer)
-                  ws-client (ws/websocket
-                             {:uri gateway-url
-                              :on-open (:on-open ws-handlers)
-                              :on-message (:on-message ws-handlers)
-                              :on-close (:on-close ws-handlers)
-                              :on-error (:on-error ws-handlers)})]
-              (state/set-ws-client! ws-client)
-              (start-event-loop ws-client token
-                                (:ws-events channels) (:control channels)
-                                (:heartbeat channels)
-                                on-message on-interaction on-ready)
-              (println "[info] [gateway] Reconnection initiated successfully"))
-            (catch Exception e
-              (println (str "[error] [gateway] Reconnect failed: " (type e)
-                            " - " (.getMessage e)))
-              (schedule-reconnect token on-message on-interaction
-                                  on-ready channels (inc attempt)))))))))
+          (do-reconnect-attempt token on-msg on-int on-rdy channels attempt))))))
 
-(defn reconnect-with-backoff
-  "Attempt reconnection with exponential backoff. Blocking version for testing."
-  [token on-message on-interaction on-ready channels attempt]
+(defn- attempt-reconnect-sync [token on-message on-interaction on-ready channels]
+  (try
+    (state/reset-gateway-state!)
+    (establish-websocket token on-message on-interaction on-ready channels)
+    :success
+    (catch Exception e (log-reconnect-failure e) :failure)))
+
+(defn reconnect-with-backoff [token on-message on-interaction on-ready channels attempt]
   (loop [current-attempt attempt]
     (when-not (state/system-shutdown?)
       (let [delay-ms (calculate-backoff current-attempt)]
-        (println (str "[info] [gateway] Reconnecting in " delay-ms
-                      "ms (attempt " (inc current-attempt) ")..."))
+        (log-reconnect-start delay-ms current-attempt)
         (wait-ms delay-ms)
         (when-not (state/system-shutdown?)
           (println "[debug] [gateway] Attempting reconnection...")
-          (let [result (try
-                         (state/reset-gateway-state!)
-                         (establish-websocket token on-message on-interaction
-                                              on-ready channels)
-                         :success
-                         (catch Exception e
-                           (println (str "[error] [gateway] Reconnect failed: "
-                                         (type e) " - " (.getMessage e)))
-                           :failure))]
-            (when (= result :failure)
-              (recur (inc current-attempt)))))))))
+          (let [result (attempt-reconnect-sync token on-message on-interaction on-ready channels)]
+            (when (= result :failure) (recur (inc current-attempt)))))))))
 
 ;; Event loop
 
-(defn start-event-loop
-  "Start main event processing loop.
-   Processes WebSocket events from ws-events-chan.
-   Responds to control commands from control-chan."
-  [ws-client token ws-events-chan control-chan heartbeat-control-chan
-   on-message on-interaction on-ready]
+(defn- shutdown-event? [event ch]
+  (or (nil? event)
+      (and (= :control (first [event ch])) (= :shutdown (second [event ch])))))
+
+(defn- handle-event-loop-shutdown [heartbeat-control-chan]
+  (println "[info] [gateway] Event loop stopping...")
+  (async/put! heartbeat-control-chan :stop))
+
+(defn- handle-close-event [heartbeat-control-chan token on-message on-interaction on-ready]
+  (async/put! heartbeat-control-chan :stop)
+  (state/set-gateway-running! false)
+  (when-not (state/system-shutdown?)
+    (let [channels (state/get-gateway-channels)]
+      (schedule-reconnect token on-message on-interaction on-ready channels 0))))
+
+(defn- handle-ws-event [ws-event ws-client token on-message on-interaction on-ready hb-chan]
+  (case (:type ws-event)
+    :message (do (process-message ws-client token (:data ws-event)
+                                  on-message on-interaction on-ready hb-chan) :continue)
+    :close (do (handle-close-event hb-chan token on-message on-interaction on-ready) :stop)
+    :error :continue
+    :continue))
+
+(defn start-event-loop [ws-client token ws-events-chan control-chan hb-chan on-msg on-int on-rdy]
   (go-loop []
-    (let [[event ch] (alt!
-                      ws-events-chan ([e] [:ws-event e])
-                      control-chan ([c] [:control c]))]
+    (let [[event ch] (alt! ws-events-chan ([e] [:ws-event e])
+                           control-chan ([c] [:control c]))]
       (cond
-        ;; Control channel closed or shutdown command
-        (or (nil? event)
-            (and (= :control (first [event ch]))
-                 (= :shutdown (second [event ch]))))
-        (do
-         (println "[info] [gateway] Event loop stopping...")
-         (async/>! heartbeat-control-chan :stop))
-
-        ;; WebSocket event
+        (shutdown-event? event ch) (handle-event-loop-shutdown hb-chan)
         (= :ws-event (first [event ch]))
-        (let [ws-event (second [event ch])]
-          (case (:type ws-event)
-            :message
-            (do
-             (process-message ws-client token (:data ws-event)
-                              on-message on-interaction on-ready
-                              heartbeat-control-chan)
-             (recur))
-
-            :close
-            (do
-              ;; Stop heartbeat
-             (async/put! heartbeat-control-chan :stop)
-             (state/set-gateway-running! false)
-              ;; Schedule reconnect if not shutting down
-             (when-not (state/system-shutdown?)
-               (let [channels (state/get-gateway-channels)]
-                 (schedule-reconnect token on-message on-interaction
-                                     on-ready channels 0)))
-              ;; Exit loop on close - reconnect will start new loop
-             nil)
-
-            :error
-            (recur)
-
-            ;; Default case for unknown types
-            (recur)))
-
-        ;; Control message received (not shutdown)
-        (= :control (first [event ch]))
-        (recur)
-
-        :else
-        (recur)))))
+        (let [ws-ev (second [event ch])
+              result (handle-ws-event ws-ev ws-client token on-msg on-int on-rdy hb-chan)]
+          (when (= :continue result) (recur)))
+        :else (recur)))))
 
 ;; WebSocket establishment
 
@@ -343,56 +329,55 @@
 
 ;; Public API
 
-(defn connect
-  "Connect to Discord Gateway.
-   on-message is called with MESSAGE_CREATE data.
-   on-interaction is called with INTERACTION_CREATE data.
-   on-ready is called with READY event data (optional).
-   Returns channel map for control."
-  ([token on-message]
-   (connect token on-message nil nil))
-  ([token on-message on-interaction]
-   (connect token on-message on-interaction nil))
-  ([token on-message on-interaction on-ready]
-   (println "[info] [gateway] Connecting to Discord Gateway...")
-   (let [channels (create-gateway-channels)]
-     (state/set-gateway-channels! channels)
-     (state/reset-gateway-state!)
-     (try
-       (let [ws-client (establish-websocket token on-message on-interaction
-                                            on-ready channels)]
-         (state/set-ws-client! ws-client)
-         (start-event-loop ws-client token
-                           (:ws-events channels) (:control channels)
-                           (:heartbeat channels)
-                           on-message on-interaction on-ready)
-         channels)
-       (catch Exception e
-         (println (str "[error] [gateway] Failed to connect: " (.getMessage e)))
-         (async/close! (:ws-events channels))
-         (async/close! (:control channels))
-         (async/close! (:heartbeat channels))
-         (throw e))))))
+(defn- close-all-channels [channels]
+  (async/close! (:ws-events channels))
+  (async/close! (:control channels))
+  (async/close! (:heartbeat channels)))
 
-(defn shutdown!
-  "Shutdown gateway connection and all loops."
-  []
+(defn- start-gateway-session [token on-message on-interaction on-ready channels]
+  (let [ws-client (establish-websocket token on-message on-interaction on-ready channels)]
+    (state/set-ws-client! ws-client)
+    (start-event-loop ws-client token (:ws-events channels) (:control channels)
+                      (:heartbeat channels) on-message on-interaction on-ready)
+    channels))
+
+(defn- connect-internal [token on-message on-interaction on-ready]
+  (println "[info] [gateway] Connecting to Discord Gateway...")
+  (let [channels (create-gateway-channels)]
+    (state/set-gateway-channels! channels)
+    (state/reset-gateway-state!)
+    (try
+      (start-gateway-session token on-message on-interaction on-ready channels)
+      (catch Exception e
+        (println (str "[error] [gateway] Failed to connect: " (.getMessage e)))
+        (close-all-channels channels)
+        (throw e)))))
+
+(defn connect
+  ([token on-message] (connect token on-message nil nil))
+  ([token on-message on-interaction] (connect token on-message on-interaction nil))
+  ([token on-message on-interaction on-ready]
+   (connect-internal token on-message on-interaction on-ready)))
+
+(defn- shutdown-control-chan [control-chan]
+  (async/put! control-chan :shutdown)
+  (async/close! control-chan))
+
+(defn- shutdown-heartbeat-chan [heartbeat-chan]
+  (async/put! heartbeat-chan :stop)
+  (async/close! heartbeat-chan))
+
+(defn- shutdown-ws-client []
+  (when-let [ws (state/get-ws-client)]
+    (try (close-ws! ws) (catch Exception _))))
+
+(defn- shutdown-channels [channels]
+  (when-let [c (:control channels)] (shutdown-control-chan c))
+  (when-let [h (:heartbeat channels)] (shutdown-heartbeat-chan h))
+  (shutdown-ws-client)
+  (when-let [e (:ws-events channels)] (async/close! e)))
+
+(defn shutdown! []
   (println "[info] [gateway] Shutting down gateway...")
-  (when-let [channels (state/get-gateway-channels)]
-    ;; Send shutdown to event loop
-    (when-let [control-chan (:control channels)]
-      (async/put! control-chan :shutdown)
-      (async/close! control-chan))
-    ;; Stop heartbeat
-    (when-let [heartbeat-chan (:heartbeat channels)]
-      (async/put! heartbeat-chan :stop)
-      (async/close! heartbeat-chan))
-    ;; Close WebSocket
-    (when-let [ws (state/get-ws-client)]
-      (try
-        (close-ws! ws)
-        (catch Exception _)))
-    ;; Close events channel
-    (when-let [ws-events (:ws-events channels)]
-      (async/close! ws-events)))
+  (when-let [channels (state/get-gateway-channels)] (shutdown-channels channels))
   (state/set-gateway-running! false))

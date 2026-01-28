@@ -25,22 +25,21 @@
   (-> (ByteBuffer/allocate size)
       (.order ByteOrder/LITTLE_ENDIAN)))
 
+(defn- fill-packet-buffer
+  "Fill buffer with packet data."
+  [buffer payload-size request-id packet-type body-bytes]
+  (-> buffer
+      (.putInt payload-size) (.putInt request-id) (.putInt packet-type)
+      (.put (bytes body-bytes)) (.put (byte 0)) (.put (byte 0))))
+
 (defn pack-packet
   "Pack RCON packet into byte array.
    Format: [size:4][id:4][type:4][body:n][null:2]"
   [request-id packet-type body]
   (let [body-bytes (encode-body body)
-        body-len (count body-bytes)
-        payload-size (+ 4 4 body-len 2)  ;; id + type + body + nulls
-        total-size (+ 4 payload-size)     ;; size field + payload
-        buffer (create-buffer total-size)]
-    (-> buffer
-        (.putInt payload-size)
-        (.putInt request-id)
-        (.putInt packet-type)
-        (.put (bytes body-bytes))
-        (.put (byte 0))
-        (.put (byte 0)))
+        payload-size (+ 4 4 (count body-bytes) 2)
+        buffer (create-buffer (+ 4 payload-size))]
+    (fill-packet-buffer buffer payload-size request-id packet-type body-bytes)
     (.array buffer)))
 
 (defn read-int-le

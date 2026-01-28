@@ -158,19 +158,22 @@
     (inc (:failure-count monitor-state))
     0))
 
+(defn- notify-status-change
+  "Send status change notification if needed."
+  [discord-client new-status result]
+  (log :info (str "Status changed to: " new-status))
+  (discord/send-status-message discord-client new-status
+                               (status/format-status-message result)))
+
 (defn- execute-monitor-cycle
   "Execute one cycle of the monitor loop."
   [discord-client k8s-client rcon-client config]
   (let [result (check-status k8s-client rcon-client config)
         new-status (:status result)
         monitor-state (state/get-monitor-state)
-        projected-count (calculate-projected-count monitor-state new-status)
-        notify? (monitor/should-notify-with-debounce?
-                 monitor-state new-status projected-count)]
-    (when notify?
-      (log :info (str "Status changed to: " new-status))
-      (discord/send-status-message discord-client new-status
-                                   (status/format-status-message result)))
+        projected-count (calculate-projected-count monitor-state new-status)]
+    (when (monitor/should-notify-with-debounce? monitor-state new-status projected-count)
+      (notify-status-change discord-client new-status result))
     (state/update-monitor-state! new-status)))
 
 (defn- handle-monitor-error
@@ -216,9 +219,7 @@
   []
   (log :info "Shutting down...")
   (state/shutdown!)
-  ;; Wait for monitor loop to stop
-  (when-let [f (state/get-monitor-future)]
-    (future-cancel f))
+  (when-let [f (state/get-monitor-future)] (future-cancel f))
   ;; Shutdown gateway (closes WebSocket and channels)
   (gateway/shutdown!)
   (log :info "Shutdown complete."))

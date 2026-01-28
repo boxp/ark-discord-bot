@@ -4,19 +4,17 @@
 
 (defonce app-state (atom nil))
 
+(defn- initial-gateway-state [] {:seq nil :running? true :connection-id 0 :channels nil})
+(defn- initial-monitor-state [config]
+  {:last-status nil :failure-count 0 :failure-threshold (:failure-threshold config)})
+(defn- initial-system-state [] {:shutdown? false :ws-client nil :monitor-future nil})
+
 (defn- create-initial-state
   "Create initial application state structure."
   [config]
-  {:gateway {:seq nil
-             :running? true
-             :connection-id 0
-             :channels nil}
-   :monitor {:last-status nil
-             :failure-count 0
-             :failure-threshold (:failure-threshold config)}
-   :system {:shutdown? false
-            :ws-client nil
-            :monitor-future nil}
+  {:gateway (initial-gateway-state)
+   :monitor (initial-monitor-state config)
+   :system (initial-system-state)
    :config config})
 
 (defn init-state!
