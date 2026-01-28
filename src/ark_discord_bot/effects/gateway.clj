@@ -154,35 +154,69 @@
                   "ms (attempt " (inc attempt) ")..."))
     (Thread/sleep delay-ms)))
 
+(defn- log-reconnect-failure
+  "Log reconnection failure details."
+  [t]
+  (println (str "[error] [gateway] Reconnect failed: " (type t)
+                " - " (.getMessage t)))
+  (.printStackTrace t)
+  (flush))
+
 (defn- attempt-reconnect
   "Attempt a single reconnection. Returns :success or :failure."
   [token on-message on-interaction on-ready make-reconnect-fn]
   (println "[debug] [gateway] Attempting reconnection...")
+  (flush)
   (try
     (let [ws-client (connect-internal token on-message on-interaction
                                       on-ready (make-reconnect-fn))]
       (state/set-ws-client! ws-client)
       (println "[info] [gateway] Reconnection initiated successfully")
+      (flush)
       :success)
-    (catch Exception e
-      (println (str "[error] [gateway] Reconnect failed: " (type e)
-                    " - " (.getMessage e)))
-      :failure)))
+    (catch Throwable t (log-reconnect-failure t) :failure)))
+
+(defn- log-reconnect-loop-state
+  "Log reconnect loop iteration state."
+  [attempt]
+  (println (str "[debug] [gateway] Reconnect loop iteration, attempt=" attempt
+                ", shutdown?=" (state/system-shutdown?)))
+  (flush))
+
+(defn- log-reconnect-attempt
+  "Log before and after reconnect attempt."
+  [result]
+  (println "[debug] [gateway] After sleep, calling attempt-reconnect...")
+  (flush)
+  result)
+
+(defn- log-reconnect-result
+  "Log reconnect attempt result."
+  [result]
+  (println (str "[debug] [gateway] attempt-reconnect returned: " result))
+  (flush)
+  result)
+
+(defn- reconnect-loop-iteration
+  "Execute one iteration of reconnect loop. Returns :continue or :stop."
+  [attempt token on-message on-interaction on-ready make-reconnect-fn]
+  (log-reconnect-loop-state attempt)
+  (when-not (state/system-shutdown?)
+    (wait-before-reconnect attempt)
+    (log-reconnect-attempt nil)
+    (let [result (attempt-reconnect token on-message on-interaction
+                                    on-ready make-reconnect-fn)]
+      (log-reconnect-result result))))
 
 (defn create-reconnect-fn
-  "Create reconnect function for automatic reconnection.
-   Uses loop/recur to avoid stack overflow on repeated failures."
+  "Create reconnect function for automatic reconnection."
   [token on-message on-interaction on-ready]
-  (let [make-reconnect-fn #(create-reconnect-fn token on-message
-                                                on-interaction on-ready)]
+  (let [mk-fn #(create-reconnect-fn token on-message on-interaction on-ready)]
     (fn []
       (loop [attempt 0]
-        (when-not (state/system-shutdown?)
-          (wait-before-reconnect attempt)
-          (let [result (attempt-reconnect token on-message on-interaction
-                                          on-ready make-reconnect-fn)]
-            (when (= result :failure)
-              (recur (inc attempt)))))))))
+        (when (= :failure (reconnect-loop-iteration
+                           attempt token on-message on-interaction on-ready mk-fn))
+          (recur (inc attempt)))))))
 
 (defn- handle-invalid-session
   "Handle INVALID_SESSION opcode."
@@ -205,17 +239,21 @@
   (println "[info] [gateway] Closing connection for reconnect...")
   (ws/close! ws-client))
 
+(defn- log-gateway-message
+  "Log received gateway message."
+  [op event-type]
+  (println (str "[debug] [gateway] Received: op=" (opcode-name op)
+                (when event-type (str ", event=" event-type)))))
+
 (defn- process-gateway-message
   "Process a single gateway message by opcode."
   [ws token data on-message on-interaction on-ready]
-  (let [op (:op data)
-        event-type (:t data)]
-    (println (str "[debug] [gateway] Received: op=" (opcode-name op)
-                  (when event-type (str ", event=" event-type))))
+  (let [op (:op data)]
+    (log-gateway-message op (:t data))
     (cond
       (= op (:hello opcodes)) (handle-hello ws token (:d data))
       (= op (:heartbeat opcodes)) (handle-heartbeat-request ws)
-      (= op (:dispatch opcodes)) (handle-dispatch data event-type on-message
+      (= op (:dispatch opcodes)) (handle-dispatch data (:t data) on-message
                                                   on-interaction on-ready)
       (= op (:invalid-session opcodes)) (handle-invalid-session)
       (= op (:reconnect opcodes)) (handle-reconnect ws))))

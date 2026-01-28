@@ -158,19 +158,22 @@
     (inc (:failure-count monitor-state))
     0))
 
+(defn- notify-status-change
+  "Send status change notification if needed."
+  [discord-client new-status result]
+  (log :info (str "Status changed to: " new-status))
+  (discord/send-status-message discord-client new-status
+                               (status/format-status-message result)))
+
 (defn- execute-monitor-cycle
   "Execute one cycle of the monitor loop."
   [discord-client k8s-client rcon-client config]
   (let [result (check-status k8s-client rcon-client config)
         new-status (:status result)
         monitor-state (state/get-monitor-state)
-        projected-count (calculate-projected-count monitor-state new-status)
-        notify? (monitor/should-notify-with-debounce?
-                 monitor-state new-status projected-count)]
-    (when notify?
-      (log :info (str "Status changed to: " new-status))
-      (discord/send-status-message discord-client new-status
-                                   (status/format-status-message result)))
+        projected-count (calculate-projected-count monitor-state new-status)]
+    (when (monitor/should-notify-with-debounce? monitor-state new-status projected-count)
+      (notify-status-change discord-client new-status result))
     (state/update-monitor-state! new-status)))
 
 (defn- handle-monitor-error
@@ -211,19 +214,19 @@
       (log :info (str "Connected to Discord as: " username))
       (log :info "Bot is now ready to receive messages"))))
 
+(defn- close-ws-client
+  "Close WebSocket client if present."
+  []
+  (when-let [ws (state/get-ws-client)]
+    (try (.close ws) (catch Exception _))))
+
 (defn- shutdown-hook
   "Shutdown hook to cleanup resources."
   []
   (log :info "Shutting down...")
   (state/shutdown!)
-  ;; Wait for monitor loop to stop
-  (when-let [f (state/get-monitor-future)]
-    (future-cancel f))
-  ;; Close WebSocket connection
-  (when-let [ws (state/get-ws-client)]
-    (try
-      (.close ws)
-      (catch Exception _)))
+  (when-let [f (state/get-monitor-future)] (future-cancel f))
+  (close-ws-client)
   (log :info "Shutdown complete."))
 
 (defn- initialize-clients
