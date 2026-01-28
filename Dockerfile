@@ -30,6 +30,7 @@ RUN native-image \
     --no-fallback \
     --report-unsupported-elements-at-runtime \
     -H:+ReportExceptionStackTraces \
+    -H:IncludeResources=config.edn \
     --enable-http \
     --enable-https \
     -jar /build/app.jar \
