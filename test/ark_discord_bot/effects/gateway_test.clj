@@ -2,8 +2,10 @@
     "Tests for Discord Gateway."
     (:require [ark-discord-bot.effects.gateway :as gateway]
               [ark-discord-bot.state :as state]
-              [babashka.http-client.websocket :as ws]
+              [clojure.core.async :as async]
               [clojure.test :refer [deftest is testing]]))
+
+;; Pure function tests (maintained)
 
 (deftest test-parse-interaction-restart-confirm
   (testing "parse-interaction extracts restart_confirm"
@@ -42,76 +44,12 @@
                 :token "token123"}]
       (is (nil? (gateway/parse-interaction data))))))
 
-(deftest test-create-close-handler
-  (testing "create-close-handler returns a function"
-    (let [handler (gateway/create-close-handler)]
-      (is (fn? handler))))
-  (testing "close handler sets gateway running to false"
-    (state/init-state! {:failure-threshold 3})
-    (is (true? (state/gateway-running?)))
-    (let [handler (gateway/create-close-handler)]
-      (handler nil 1000 "Normal closure")
-      (is (false? (state/gateway-running?))))))
-
-(deftest test-create-error-handler
-  (testing "create-error-handler returns a function"
-    (let [handler (gateway/create-error-handler)]
-      (is (fn? handler))))
-  (testing "error handler does not throw"
-    (let [handler (gateway/create-error-handler)]
-      (is (nil? (handler nil (Exception. "Test error")))))))
-
 (deftest test-opcode-name
   (testing "opcode-name returns correct names"
     (is (= "DISPATCH" (gateway/opcode-name 0)))
     (is (= "HELLO" (gateway/opcode-name 10)))
     (is (= "INVALID_SESSION" (gateway/opcode-name 9)))
     (is (= "UNKNOWN(99)" (gateway/opcode-name 99)))))
-
-(deftest test-create-close-handler-with-reconnect
-  (testing "close handler with reconnect triggers reconnect callback"
-    (let [reconnect-called (atom false)
-          reconnect-fn (fn [] (reset! reconnect-called true))
-          handler (gateway/create-close-handler reconnect-fn)]
-      (state/init-state! {:failure-threshold 3})
-      (handler nil 1006 "")
-      ;; Give future time to execute
-      (Thread/sleep 100)
-      (is (true? @reconnect-called))))
-  (testing "close handler with reconnect sets gateway running to false"
-    (state/init-state! {:failure-threshold 3})
-    (is (true? (state/gateway-running?)))
-    (let [handler (gateway/create-close-handler (fn []))]
-      (handler nil 1006 "")
-      (is (false? (state/gateway-running?))))))
-
-(deftest test-create-close-handler-normal-close
-  (testing "close handler with code 1000 triggers reconnect when not shutdown"
-    (let [reconnect-called (atom false)
-          reconnect-fn (fn [] (reset! reconnect-called true))
-          handler (gateway/create-close-handler reconnect-fn)]
-      (state/init-state! {:failure-threshold 3})
-      (handler nil 1000 "Normal closure")
-      (Thread/sleep 100)
-      (is (true? @reconnect-called))))
-  (testing "close handler with code 1000 does not trigger reconnect when shutdown"
-    (let [reconnect-called (atom false)
-          reconnect-fn (fn [] (reset! reconnect-called true))
-          handler (gateway/create-close-handler reconnect-fn)]
-      (state/init-state! {:failure-threshold 3})
-      (state/shutdown!)
-      (handler nil 1000 "Normal closure")
-      (Thread/sleep 100)
-      (is (false? @reconnect-called)))))
-
-(deftest test-should-reconnect?
-  (testing "should-reconnect? returns true when not shutdown"
-    (state/init-state! {:failure-threshold 3})
-    (is (true? (#'gateway/should-reconnect?))))
-  (testing "should-reconnect? returns false when shutdown"
-    (state/init-state! {:failure-threshold 3})
-    (state/shutdown!)
-    (is (false? (#'gateway/should-reconnect?)))))
 
 (deftest test-calculate-backoff
   (testing "calculate-backoff returns initial delay for attempt 0"
@@ -123,114 +61,198 @@
   (testing "calculate-backoff caps at max delay"
     (is (= 60000 (gateway/calculate-backoff 10)))))
 
-(deftest test-create-reconnect-fn
-  (testing "create-reconnect-fn returns a function"
-    (let [reconnect-fn (gateway/create-reconnect-fn
-                        "token" (fn [_]) nil nil)]
-      (is (fn? reconnect-fn)))))
-
-(deftest test-start-heartbeat-sends-immediately
-  (testing "start-heartbeat sends first heartbeat immediately (not after interval)"
-    (let [send-times (atom [])
-          start-time (atom nil)
-          mock-ws-client (reify Object)
-          interval-ms 5000]  ;; 5 second interval
-      (state/init-state! {:failure-threshold 3})
-      (reset! start-time (System/currentTimeMillis))
-      ;; Mock send-json to record when it's called
-      (with-redefs [gateway/send-json (fn [_ _]
-                                        (swap! send-times conj
-                                               (- (System/currentTimeMillis)
-                                                  @start-time)))]
-                   (let [_ (#'gateway/start-heartbeat mock-ws-client interval-ms)]
-          ;; Wait a bit for the first heartbeat
-                     (Thread/sleep 200)
-          ;; Stop the loop
-                     (state/set-gateway-running! false)
-          ;; First heartbeat should be sent within 200ms, not after 5000ms
-                     (is (seq @send-times) "At least one heartbeat should be sent")
-                     (when (seq @send-times)
-                       (is (< (first @send-times) 200)
-                           "First heartbeat should be sent immediately (within 200ms)")))))))
-
 (deftest test-build-heartbeat
   (testing "build-heartbeat creates correct payload"
     (let [payload (#'gateway/build-heartbeat 42)]
       (is (= 1 (:op payload)))  ;; HEARTBEAT opcode
       (is (= 42 (:d payload))))))
 
-(deftest test-process-gateway-message-heartbeat-request
-  (testing "process-gateway-message responds to server HEARTBEAT request (op=1)"
-    (let [heartbeat-sent (atom false)
-          heartbeat-payload (atom nil)
+;; Channel-based tests (new)
+
+(deftest test-create-gateway-channels
+  (testing "creates required channels"
+    (let [channels (gateway/create-gateway-channels)]
+      (is (contains? channels :ws-events))
+      (is (contains? channels :control))
+      (is (contains? channels :heartbeat))
+      ;; Cleanup
+      (async/close! (:ws-events channels))
+      (async/close! (:control channels))
+      (async/close! (:heartbeat channels)))))
+
+(deftest test-heartbeat-loop-stops-on-control
+  (testing "heartbeat loop stops when stop command received on control channel"
+    (let [heartbeat-chan (async/chan)
+          control-chan (async/chan)
+          sent-count (atom 0)
+          mock-ws-client (reify Object)
+          send-fn (fn [_ _] (swap! sent-count inc))]
+      (state/init-state! {:failure-threshold 3})
+      ;; Start heartbeat loop with short interval
+      (#'gateway/start-heartbeat-loop mock-ws-client 50 control-chan send-fn)
+      ;; Wait for some heartbeats
+      (Thread/sleep 120)
+      (let [count-before @sent-count]
+        ;; Send stop command
+        (async/>!! control-chan :stop)
+        ;; Wait and verify no more heartbeats
+        (Thread/sleep 100)
+        ;; Should have stopped after receiving :stop
+        (is (<= @sent-count (+ count-before 1))
+            "Heartbeat should stop after receiving stop command"))
+      ;; Cleanup
+      (async/close! heartbeat-chan)
+      (async/close! control-chan))))
+
+(deftest test-event-loop-processes-hello
+  (testing "HELLO opcode triggers IDENTIFY and starts heartbeat"
+    (let [ws-events-chan (async/chan)
+          control-chan (async/chan)
+          heartbeat-control-chan (async/chan)
+          identify-sent (atom false)
+          heartbeat-started (atom false)
           mock-ws-client (reify Object)]
       (state/init-state! {:failure-threshold 3})
-      (state/update-gateway-seq! 123)
-      ;; Mock send-json to capture the heartbeat response
       (with-redefs [gateway/send-json (fn [_ payload]
-                                        (reset! heartbeat-sent true)
-                                        (reset! heartbeat-payload payload))]
-        ;; Simulate receiving HEARTBEAT request from server (op=1)
-                   (#'gateway/process-gateway-message
-                    mock-ws-client "token" {:op 1} nil nil nil)
-        ;; Verify heartbeat was sent immediately
-                   (is (true? @heartbeat-sent)
-                       "Should send heartbeat in response to server HEARTBEAT request")
-                   (when @heartbeat-sent
-                     (is (= 1 (:op @heartbeat-payload))
-                         "Response should be HEARTBEAT opcode")
-                     (is (= 123 (:d @heartbeat-payload))
-                         "Response should include current sequence number"))))))
+                                        (when (= 2 (:op payload))
+                                          (reset! identify-sent true)))
+                    gateway/start-heartbeat-loop (fn [_ _ _ _]
+                                                   (reset! heartbeat-started true))]
+        ;; Start event loop
+                   (#'gateway/start-event-loop mock-ws-client "test-token"
+                                               ws-events-chan control-chan heartbeat-control-chan
+                                               nil nil nil)
+        ;; Send HELLO message
+                   (async/>!! ws-events-chan {:type :message
+                                              :data {:op 10 :d {:heartbeat_interval 5000}}})
+        ;; Wait for processing
+                   (Thread/sleep 50)
+        ;; Verify
+                   (is @identify-sent "IDENTIFY should be sent on HELLO")
+                   (is @heartbeat-started "Heartbeat loop should start on HELLO"))
+      ;; Cleanup
+      (async/>!! control-chan :shutdown)
+      (async/close! ws-events-chan)
+      (async/close! control-chan)
+      (async/close! heartbeat-control-chan))))
 
-(deftest test-handle-hello-sends-identify-before-heartbeat
-  (testing "handle-hello sends IDENTIFY before starting heartbeat loop"
-    (let [send-order (atom [])
+(deftest test-event-loop-processes-dispatch
+  (testing "DISPATCH opcode calls appropriate callback"
+    (let [ws-events-chan (async/chan)
+          control-chan (async/chan)
+          heartbeat-control-chan (async/chan)
+          message-received (atom nil)
+          on-message (fn [msg] (reset! message-received msg))
           mock-ws-client (reify Object)]
       (state/init-state! {:failure-threshold 3})
-      (with-redefs [gateway/send-json (fn [_ payload]
-                                        (swap! send-order conj (:op payload)))
-                    ;; Mock start-heartbeat to track when it's called
-                    gateway/start-heartbeat (fn [_ _]
-                                              (swap! send-order conj :heartbeat-loop-started)
-                                              nil)]
-                   (#'gateway/handle-hello mock-ws-client "test-token" {:heartbeat_interval 5000})
-        ;; IDENTIFY (op=2) should be sent before heartbeat loop starts
-                   (is (= [2 :heartbeat-loop-started] @send-order)
-                       "IDENTIFY should be sent before heartbeat loop starts")))))
+      ;; Start event loop
+      (#'gateway/start-event-loop mock-ws-client "test-token"
+                                  ws-events-chan control-chan heartbeat-control-chan
+                                  on-message nil nil)
+      ;; Send DISPATCH message
+      (async/>!! ws-events-chan {:type :message
+                                 :data {:op 0 :t "MESSAGE_CREATE" :s 1
+                                        :d {:content "test"}}})
+      ;; Wait for processing
+      (Thread/sleep 50)
+      ;; Verify callback was called
+      (is (= {:content "test"} @message-received)
+          "on-message callback should be called with message data")
+      ;; Cleanup
+      (async/>!! control-chan :shutdown)
+      (async/close! ws-events-chan)
+      (async/close! control-chan)
+      (async/close! heartbeat-control-chan))))
 
-(deftest test-process-gateway-message-reconnect
-  (testing "process-gateway-message closes connection on RECONNECT opcode"
-    (let [close-called (atom false)
+(deftest test-event-loop-handles-close
+  (testing "close event triggers reconnect when not shutting down"
+    (let [ws-events-chan (async/chan)
+          control-chan (async/chan)
+          heartbeat-control-chan (async/chan)
+          reconnect-triggered (atom false)
+          mock-ws-client (reify Object)
+          channels {:ws-events ws-events-chan
+                    :control control-chan
+                    :heartbeat heartbeat-control-chan}]
+      (state/init-state! {:failure-threshold 3})
+      (state/set-gateway-channels! channels)
+      ;; Start event loop with custom reconnect behavior
+      (with-redefs [gateway/schedule-reconnect (fn [_ _ _ _ _ _]
+                                                 (reset! reconnect-triggered true))]
+                   (#'gateway/start-event-loop mock-ws-client "test-token"
+                                               ws-events-chan control-chan heartbeat-control-chan
+                                               nil nil nil)
+        ;; Send close event
+                   (async/>!! ws-events-chan {:type :close :code 1006 :reason ""})
+        ;; Wait for processing
+                   (Thread/sleep 50)
+        ;; Verify reconnect was triggered
+                   (is @reconnect-triggered "Reconnect should be triggered on close"))
+      ;; Cleanup - channels may have been replaced, close originals
+      (async/close! ws-events-chan)
+      (async/close! control-chan)
+      (async/close! heartbeat-control-chan))))
+
+(deftest test-event-loop-handles-reconnect-opcode
+  (testing "RECONNECT opcode (op=7) closes connection"
+    (let [ws-events-chan (async/chan)
+          control-chan (async/chan)
+          heartbeat-control-chan (async/chan)
+          close-called (atom false)
           mock-ws-client (reify Object)]
       (state/init-state! {:failure-threshold 3})
-      (with-redefs [ws/close! (fn [_] (reset! close-called true))]
-        ;; Simulate receiving RECONNECT from server (op=7)
-                   (#'gateway/process-gateway-message
-                    mock-ws-client "token" {:op 7} nil nil nil)
-        ;; Verify connection was closed
-                   (is (true? @close-called)
-                       "Should close WebSocket connection when receiving RECONNECT opcode")))))
+      (with-redefs [gateway/close-ws! (fn [_] (reset! close-called true))]
+                   (#'gateway/start-event-loop mock-ws-client "test-token"
+                                               ws-events-chan control-chan heartbeat-control-chan
+                                               nil nil nil)
+        ;; Send RECONNECT opcode
+                   (async/>!! ws-events-chan {:type :message :data {:op 7}})
+        ;; Wait for processing
+                   (Thread/sleep 50)
+        ;; Verify close was called
+                   (is @close-called "WebSocket should be closed on RECONNECT opcode"))
+      ;; Cleanup
+      (async/>!! control-chan :shutdown)
+      (async/close! ws-events-chan)
+      (async/close! control-chan)
+      (async/close! heartbeat-control-chan))))
 
-(deftest test-heartbeat-stops-on-connection-id-change
-  (testing "heartbeat loop stops when connection-id changes (reconnection)"
-    (let [send-count (atom 0)
-          mock-ws-client (reify Object)]
+(deftest test-shutdown-stops-all-loops
+  (testing "shutdown! closes channels and stops loops"
+    (let [channels (gateway/create-gateway-channels)]
       (state/init-state! {:failure-threshold 3})
-      (with-redefs [gateway/send-json (fn [_ _] (swap! send-count inc))]
-                   (let [_ (#'gateway/start-heartbeat mock-ws-client 50)]
-          ;; Wait for first heartbeat
-                     (Thread/sleep 80)
-                     (let [count-before @send-count]
-            ;; Simulate reconnection by resetting gateway state
-                       (state/reset-gateway-state!)
-            ;; Wait for potential additional heartbeats
-                       (Thread/sleep 150)
-            ;; Old heartbeat loop should have stopped
-            ;; Only 1-2 more heartbeats at most before noticing id change
-                       (is (<= @send-count (+ count-before 2))
-                           "Old heartbeat loop should stop after connection-id changes"))
-          ;; Clean up
-                     (state/set-gateway-running! false))))))
+      (state/set-gateway-channels! channels)
+      ;; Shutdown
+      (gateway/shutdown!)
+      ;; Wait for channels to close
+      (Thread/sleep 50)
+      ;; Verify gateway is not running
+      (is (false? (state/gateway-running?))
+          "Gateway should not be running after shutdown"))))
+
+(deftest test-reconnect-uses-backoff
+  (testing "reconnect waits with exponential backoff"
+    (let [wait-times (atom [])
+          connect-attempts (atom 0)
+          channels (gateway/create-gateway-channels)]
+      (state/init-state! {:failure-threshold 3})
+      (with-redefs [gateway/wait-ms (fn [ms] (swap! wait-times conj ms))
+                    gateway/establish-websocket (fn [& _]
+                                                  (swap! connect-attempts inc)
+                                                  (when (< @connect-attempts 3)
+                                                    (throw (Exception. "Test failure")))
+                                                  ;; Success on 3rd attempt
+                                                  :mock-ws)
+                    gateway/start-event-loop (fn [& _] nil)]
+        ;; Trigger reconnect
+                   (#'gateway/reconnect-with-backoff "token" nil nil nil channels 0)
+        ;; Verify backoff delays (first 2 attempts fail, 3rd succeeds)
+                   (is (= [1000 2000 4000] @wait-times)
+                       "Should use exponential backoff"))
+      ;; Cleanup
+      (async/close! (:ws-events channels))
+      (async/close! (:control channels))
+      (async/close! (:heartbeat channels)))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.effects.gateway-test)
