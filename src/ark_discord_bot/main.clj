@@ -219,11 +219,8 @@
   ;; Wait for monitor loop to stop
   (when-let [f (state/get-monitor-future)]
     (future-cancel f))
-  ;; Close WebSocket connection
-  (when-let [ws (state/get-ws-client)]
-    (try
-      (.close ws)
-      (catch Exception _)))
+  ;; Shutdown gateway (closes WebSocket and channels)
+  (gateway/shutdown!)
   (log :info "Shutdown complete."))
 
 (defn- initialize-clients
@@ -250,10 +247,10 @@
   (state/set-monitor-future!
    (start-monitor-loop (:discord clients) (:k8s clients) (:rcon clients) config))
   (log :info "Connecting to Discord Gateway...")
-  (state/set-ws-client!
-   (gateway/connect-with-reconnect (:discord-token config) (:msg-handler handlers)
-                                   (:interaction-handler handlers)
-                                   (create-ready-handler))))
+  ;; connect now returns channels map, ws-client is stored internally
+  (gateway/connect (:discord-token config) (:msg-handler handlers)
+                   (:interaction-handler handlers)
+                   (create-ready-handler)))
 
 (defn- run-main-loop
   "Wait for shutdown signal."

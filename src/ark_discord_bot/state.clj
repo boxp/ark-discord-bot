@@ -9,8 +9,8 @@
   [config]
   {:gateway {:seq nil
              :running? true
-             :msg-buffer ""
-             :connection-id 0}
+             :connection-id 0
+             :channels nil}
    :monitor {:last-status nil
              :failure-count 0
              :failure-threshold (:failure-threshold config)}
@@ -51,17 +51,15 @@
   []
   (get-in @app-state [:gateway :running?]))
 
-(defn append-to-msg-buffer!
-  "Append message to gateway message buffer."
-  [msg]
-  (swap! app-state update-in [:gateway :msg-buffer] str msg))
-
-(defn clear-msg-buffer!
-  "Clear and return gateway message buffer."
+(defn get-gateway-channels
+  "Get gateway channels map."
   []
-  (let [result (get-in @app-state [:gateway :msg-buffer])]
-    (swap! app-state assoc-in [:gateway :msg-buffer] "")
-    result))
+  (get-in @app-state [:gateway :channels]))
+
+(defn set-gateway-channels!
+  "Set gateway channels map."
+  [channels]
+  (swap! app-state assoc-in [:gateway :channels] channels))
 
 (defn get-connection-id
   "Get current gateway connection ID."
@@ -70,15 +68,17 @@
 
 (defn reset-gateway-state!
   "Reset gateway state to initial values for reconnection.
-   Increments connection-id to invalidate old heartbeat loops."
+   Increments connection-id to invalidate old heartbeat loops.
+   Preserves channels."
   []
   (swap! app-state
          (fn [state]
-           (let [new-id (inc (get-in state [:gateway :connection-id] 0))]
+           (let [new-id (inc (get-in state [:gateway :connection-id] 0))
+                 channels (get-in state [:gateway :channels])]
              (assoc state :gateway {:seq nil
                                     :running? true
-                                    :msg-buffer ""
-                                    :connection-id new-id})))))
+                                    :connection-id new-id
+                                    :channels channels})))))
 
 ;; Monitor state accessors
 

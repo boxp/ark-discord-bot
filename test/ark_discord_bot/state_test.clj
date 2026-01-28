@@ -1,6 +1,7 @@
 (ns ark-discord-bot.state-test
     "Tests for centralized application state management."
     (:require [ark-discord-bot.state :as state]
+              [clojure.core.async :as async]
               [clojure.test :refer [deftest is testing]]))
 
 (deftest test-init-state
@@ -19,7 +20,6 @@
     (let [gw (state/get-gateway-state)]
       (is (nil? (:seq gw)))
       (is (true? (:running? gw)))
-      (is (= "" (:msg-buffer gw)))
       (is (= 0 (:connection-id gw))))))
 
 (deftest test-monitor-state
@@ -49,20 +49,19 @@
     (state/set-gateway-running! false)
     (is (false? (:running? (state/get-gateway-state))))))
 
-(deftest test-append-to-msg-buffer
-  (testing "append-to-msg-buffer! appends to buffer"
+(deftest test-gateway-channels
+  (testing "get/set gateway-channels"
     (state/init-state! {:failure-threshold 3})
-    (state/append-to-msg-buffer! "hello")
-    (state/append-to-msg-buffer! " world")
-    (is (= "hello world" (:msg-buffer (state/get-gateway-state))))))
-
-(deftest test-clear-msg-buffer
-  (testing "clear-msg-buffer! clears and returns buffer"
+    (let [channels {:ws-events (async/chan) :control (async/chan) :heartbeat (async/chan)}]
+      (state/set-gateway-channels! channels)
+      (is (= channels (state/get-gateway-channels)))
+      ;; Cleanup
+      (async/close! (:ws-events channels))
+      (async/close! (:control channels))
+      (async/close! (:heartbeat channels))))
+  (testing "gateway-channels is nil initially"
     (state/init-state! {:failure-threshold 3})
-    (state/append-to-msg-buffer! "test message")
-    (let [result (state/clear-msg-buffer!)]
-      (is (= "test message" result))
-      (is (= "" (:msg-buffer (state/get-gateway-state)))))))
+    (is (nil? (state/get-gateway-channels)))))
 
 (deftest test-update-monitor-state
   (testing "update-monitor-state! updates monitor state"
@@ -95,14 +94,12 @@
     ;; Modify gateway state
     (state/update-gateway-seq! 42)
     (state/set-gateway-running! false)
-    (state/append-to-msg-buffer! "stale data")
     ;; Reset
     (state/reset-gateway-state!)
     ;; Verify reset
     (let [gw (state/get-gateway-state)]
       (is (nil? (:seq gw)))
-      (is (true? (:running? gw)))
-      (is (= "" (:msg-buffer gw)))))
+      (is (true? (:running? gw)))))
   (testing "reset-gateway-state! increments connection-id"
     (state/init-state! {:failure-threshold 3})
     (is (= 0 (state/get-connection-id)))
