@@ -17,7 +17,7 @@
    :exec-fn cognitect.test-runner.api/test}
 
   :lint
-  {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2024.09.27"}}
+  {:extra-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
    :main-opts ["-m" "clj-kondo.main" "--lint" "src" "test"]}
 
   :format-check
