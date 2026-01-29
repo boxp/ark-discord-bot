@@ -1,6 +1,6 @@
 {:paths ["src" "resources"]
 
- :deps {org.clojure/clojure {:mvn/version "1.11.4"}
+ :deps {org.clojure/clojure {:mvn/version "1.12.4"}
         org.clojure/core.async {:mvn/version "1.6.681"}
         org.babashka/http-client {:mvn/version "0.4.23"}
         cheshire/cheshire {:mvn/version "5.13.0"}
