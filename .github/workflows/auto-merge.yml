@@ -1,0 +1,59 @@
+---
+name: Auto Merge for Renovate
+on:
+  workflow_run:
+    workflows: ["Clojure CI"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  enable-auto-merge:
+    runs-on: ubuntu-latest
+    permissions: {}
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'renovate[bot]'
+    steps:
+      - name: Get PR number
+        id: pr
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        with:
+          script: |
+            const { data: pullRequests } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`,
+              state: 'open'
+            });
+            if (pullRequests.length > 0) {
+              const pr = pullRequests[0];
+              if (pr.body && pr.body.includes('**Automerge**: Enabled.')) {
+                return pr.number;
+              }
+            }
+            return '';
+          result-encoding: string
+
+      - name: Generate token
+        if: steps.pr.outputs.result != ''
+        id: generate_token
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          permissions: >-
+            {
+              "pull_requests": "write",
+              "contents": "write"
+            }
+          repositories: >-
+            ["${{ github.event.repository.name }}"]
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.result != ''
+        run: gh -R "$GITHUB_REPOSITORY" pr merge --squash --auto --delete-branch "$PR_NUMBER"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.result }}
