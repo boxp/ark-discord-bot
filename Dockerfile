@@ -1,5 +1,5 @@
 # Stage 1: Build uberjar
-FROM clojure:temurin-21-tools-deps-alpine AS builder
+FROM clojure:temurin-21-tools-deps-alpine@sha256:93480cf9e020ab0bb9416f54d60be0aa06aa4dc7dbb6dc8bff21ea8a837846ae AS builder
 
 WORKDIR /build
 
@@ -17,7 +17,7 @@ COPY resources/ ./resources/
 RUN clojure -T:build uberjar
 
 # Stage 2: Build native image
-FROM ghcr.io/graalvm/native-image:21 AS native-builder
+FROM ghcr.io/graalvm/native-image:21@sha256:5689c19b344f146844d02da97723d0ac21f84884db0dd156c37f999758b3fb3f AS native-builder
 
 WORKDIR /build
 
@@ -37,7 +37,7 @@ RUN native-image \
     ark-discord-bot
 
 # Stage 3: Runtime (minimal)
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
 
 # Install minimal runtime dependencies
 RUN apt-get update && \
