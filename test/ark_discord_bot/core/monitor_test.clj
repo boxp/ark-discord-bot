@@ -40,12 +40,20 @@
       ;; Now transitioning from :running to :error should work normally
       (is (not (monitor/should-notify-with-debounce? state :error 1)))
       (is (monitor/should-notify-with-debounce? state :error 3))))
-  (testing "threshold=1: notifies on second cycle after initial suppression"
+  (testing "threshold=1: update-state does not increment failure-count on initial check"
     (let [state (-> (monitor/create-state 1)
                     (monitor/update-state :error))]
-      ;; After initial suppression, failure-count is now 2
-      ;; which exceeds threshold=1, should still notify
-      (is (monitor/should-notify-with-debounce? state :error 2)))))
+      ;; Initial check should not count as failure
+      (is (= 0 (:failure-count state)))
+      (is (= :error (:last-status state)))))
+  (testing "threshold=1: notifies exactly once on second cycle"
+    (let [state (-> (monitor/create-state 1)
+                    (monitor/update-state :error))]
+      ;; failure-count=0 after initial, next cycle increments to 1
+      ;; which matches threshold=1 exactly
+      (is (monitor/should-notify-with-debounce? state :error 1))
+      ;; failure-count=2 on third cycle should NOT notify (exactly once)
+      (is (not (monitor/should-notify-with-debounce? state :error 2))))))
 
 (deftest test-debounce-failures
   (testing "debounce delays notification until threshold"

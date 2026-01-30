@@ -28,15 +28,16 @@
     (not= (:last-status state) :running)
     ;; Failure state (new or continuing) - notify when threshold is hit exactly
     :else
-    (>= failure-count (:failure-threshold state))))
+    (= failure-count (:failure-threshold state))))
 
 (defn update-state
   "Update monitor state with new status."
   [state new-status]
-  (let [is-failure? (not= :running new-status)
-        new-count (if is-failure?
-                    (inc (:failure-count state))
-                    0)]
+  (let [initial? (nil? (:last-status state))
+        is-failure? (not= :running new-status)
+        new-count (if (or (not is-failure?) initial?)
+                    0
+                    (inc (:failure-count state)))]
     (assoc state
            :last-status new-status
            :failure-count new-count)))
