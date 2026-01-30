@@ -20,6 +20,9 @@
    For failures, waits until threshold is reached exactly once."
   [state new-status failure-count]
   (cond
+    ;; Initial check (bot just started) - suppress notification
+    (nil? (:last-status state))
+    false
     ;; Transitioning to success - immediate notification on change
     (= :running new-status)
     (not= (:last-status state) :running)
@@ -30,13 +33,23 @@
 (defn update-state
   "Update monitor state with new status."
   [state new-status]
-  (let [is-failure? (not= :running new-status)
-        new-count (if is-failure?
-                    (inc (:failure-count state))
-                    0)]
+  (let [initial? (nil? (:last-status state))
+        is-failure? (not= :running new-status)
+        new-count (if (or (not is-failure?) initial?)
+                    0
+                    (inc (:failure-count state)))]
     (assoc state
            :last-status new-status
            :failure-count new-count)))
+
+(defn projected-failure-count
+  "Calculate projected failure count for the next state.
+   Returns 0 on initial check or success, incremented count on failure."
+  [state new-status]
+  (let [initial? (nil? (:last-status state))]
+    (if (or (= :running new-status) initial?)
+      0
+      (inc (:failure-count state)))))
 
 (defn increment-failure
   "Increment failure count."
