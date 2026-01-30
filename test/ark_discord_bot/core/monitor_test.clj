@@ -80,5 +80,19 @@
                     (monitor/update-state :running))]
       (is (= 0 (:failure-count state))))))
 
+(deftest test-projected-failure-count
+  (testing "returns 0 for running status"
+    (let [state (-> (monitor/create-state 3)
+                    (monitor/update-state :running))]
+      (is (= 0 (monitor/projected-failure-count state :running)))))
+  (testing "increments failure-count for non-running status"
+    (let [state (-> (monitor/create-state 3)
+                    (monitor/update-state :running))]
+      (is (= 1 (monitor/projected-failure-count state :error)))))
+  (testing "does not increment on initial check (last-status nil)"
+    (let [state (monitor/create-state 3)]
+      (is (= 0 (monitor/projected-failure-count state :error)))
+      (is (= 0 (monitor/projected-failure-count state :running))))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.monitor-test)

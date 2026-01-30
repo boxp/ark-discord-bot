@@ -41,9 +41,7 @@
     (status/determine-status k8s-result rcon-result)))
 
 (defn- calculate-projected-count [monitor-state new-status]
-  (if (not= :running new-status)
-    (inc (:failure-count monitor-state))
-    0))
+  (monitor/projected-failure-count monitor-state new-status))
 
 (defn- notify-status-change [discord-client new-status result]
   (log :info (str "Status changed to: " new-status))
@@ -51,15 +49,7 @@
                                (status/format-status-message result)))
 
 (defn- update-monitor-state! [monitor-state-atom new-status]
-  (swap! monitor-state-atom
-         (fn [state]
-           (let [is-failure? (not= :running new-status)
-                 new-count (if is-failure?
-                             (inc (:failure-count state))
-                             0)]
-             (-> state
-                 (assoc :last-status new-status)
-                 (assoc :failure-count new-count))))))
+  (swap! monitor-state-atom monitor/update-state new-status))
 
 (defn- execute-monitor-cycle [discord-client k8s-client rcon-client config monitor-state-atom]
   (let [result (check-status k8s-client rcon-client config)

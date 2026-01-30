@@ -42,6 +42,15 @@
            :last-status new-status
            :failure-count new-count)))
 
+(defn projected-failure-count
+  "Calculate projected failure count for the next state.
+   Returns 0 on initial check or success, incremented count on failure."
+  [state new-status]
+  (let [initial? (nil? (:last-status state))]
+    (if (or (= :running new-status) initial?)
+      0
+      (inc (:failure-count state)))))
+
 (defn increment-failure
   "Increment failure count."
   [state]
