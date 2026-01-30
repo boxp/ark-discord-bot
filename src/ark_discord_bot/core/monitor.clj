@@ -20,6 +20,9 @@
    For failures, waits until threshold is reached exactly once."
   [state new-status failure-count]
   (cond
+    ;; Initial check (bot just started) - suppress notification
+    (nil? (:last-status state))
+    false
     ;; Transitioning to success - immediate notification on change
     (= :running new-status)
     (not= (:last-status state) :running)

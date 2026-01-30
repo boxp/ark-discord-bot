@@ -27,6 +27,20 @@
                     (monitor/update-state :running))]
       (is (not (monitor/should-notify? state :running))))))
 
+(deftest test-debounce-initial-check-suppressed
+  (testing "should-notify-with-debounce? returns false when last-status is nil"
+    (let [state (monitor/create-state 3)]
+      ;; First check with :running should not notify
+      (is (not (monitor/should-notify-with-debounce? state :running 0)))
+      ;; First check with :error should not notify
+      (is (not (monitor/should-notify-with-debounce? state :error 1)))))
+  (testing "after update-state, normal notification logic resumes"
+    (let [state (-> (monitor/create-state 3)
+                    (monitor/update-state :running))]
+      ;; Now transitioning from :running to :error should work normally
+      (is (not (monitor/should-notify-with-debounce? state :error 1)))
+      (is (monitor/should-notify-with-debounce? state :error 3)))))
+
 (deftest test-debounce-failures
   (testing "debounce delays notification until threshold"
     (let [state (-> (monitor/create-state 3)
