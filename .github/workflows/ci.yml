@@ -50,7 +50,7 @@ jobs:
       - name: Install cljfmt
         # renovate: datasource=github-releases depName=weavejester/cljfmt
         env:
-          CLJFMT_VERSION: "0.15.6"
+          CLJFMT_VERSION: "0.16.0"
         run: |
           mkdir -p ~/.local/bin
           curl -sLO https://github.com/weavejester/cljfmt/releases/download/${CLJFMT_VERSION}/cljfmt-${CLJFMT_VERSION}-linux-amd64.tar.gz
