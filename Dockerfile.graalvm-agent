@@ -1,0 +1,15 @@
+# Dockerfile for GraalVM tracing agent with Clojure
+# Used by: make docker-native-config-test, make docker-native-config-run
+FROM ghcr.io/graalvm/jdk-community:21
+
+# Install required tools
+RUN microdnf install -y gzip tar git && \
+    microdnf clean all
+
+# Install Clojure CLI
+RUN curl -sLO https://download.clojure.org/install/linux-install.sh && \
+    chmod +x linux-install.sh && \
+    ./linux-install.sh && \
+    rm linux-install.sh
+
+WORKDIR /app
