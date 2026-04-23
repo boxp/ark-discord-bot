@@ -4,7 +4,7 @@
         org.clojure/core.async {:mvn/version "1.9.865"}
         org.babashka/http-client {:mvn/version "0.4.23"}
         cheshire/cheshire {:mvn/version "6.2.0"}
-        babashka/fs {:mvn/version "0.5.32"}
+        babashka/fs {:mvn/version "0.5.33"}
         integrant/integrant {:mvn/version "1.0.1"}}
 
  :aliases
