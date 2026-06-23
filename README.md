@@ -74,19 +74,41 @@ docker build -t ark-discord-bot .  # Dockerイメージビルド
 
 ### GraalVM Native Image設定の自動生成
 
-GraalVM Tracing Agentを使用して、リフレクション設定を自動生成できます：
+GraalVM Tracing Agentを使用して、リフレクション設定を自動生成できます。
+
+#### Docker使用（推奨、GraalVMのローカルインストール不要）
+
+```bash
+# 初回のみ: GraalVMエージェント用Dockerイメージをビルド
+make docker-native-config-build
+
+# テスト実行時にリフレクション使用を追跡
+make docker-native-config-test
+
+# 実際のボット実行時に追跡（.envファイル必要）
+# 起動後、各コマンド（!ark status等）を実行してからCtrl+Cで終了
+make docker-native-config-run
+```
+
+#### ローカルGraalVM使用
+
+ローカルにGraalVMがインストールされている場合：
 
 ```bash
 # テスト実行時にリフレクション使用を追跡
 make native-config-test
 
 # 実際のボット実行時に追跡（.envファイル必要）
-# 起動後、各コマンド（!ark status等）を実行してからCtrl+Cで終了
 make native-config-run
+```
 
-# 推奨: 両方実行してカバレッジを最大化
-make native-config-test
-make native-config-run
+#### 推奨ワークフロー
+
+```bash
+# 両方実行してカバレッジを最大化
+make docker-native-config-build  # 初回のみ
+make docker-native-config-test
+make docker-native-config-run
 ```
 
 生成された設定は `resources/META-INF/native-image/ark-discord-bot/` に保存されます。
