@@ -122,7 +122,7 @@
       :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
       :pal-update-confirm (execute-pal-update-confirm token interaction-id interaction-token
-                                                     github-client config)
+                                                      github-client config)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
