@@ -11,3 +11,6 @@ data:
   RCON_PORT: "27020"
   MONITORING_INTERVAL: "30"
   LOG_LEVEL: "INFO"
+  PALSERVER_GITHUB_REPO: "boxp/palserver"
+  PALSERVER_WORKFLOW: "check-palworld-update.yml"
+  PALSERVER_BRANCH: "main"

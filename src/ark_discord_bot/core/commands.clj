@@ -1,19 +1,35 @@
 (ns ark-discord-bot.core.commands
-    "Discord command handlers for !ark commands."
+    "Discord command handlers for !ark and !pal commands."
     (:require [clojure.string :as str]))
 
-(def ^:private command-pattern #"(?i)^!ark\s+(\w+)(?:\s+(.*))?$")
+(def ^:private ark-command-pattern #"(?i)^!ark\s+(\w+)(?:\s+(.*))?$")
+(def ^:private pal-command-pattern #"(?i)^!pal\s+(\w+)(?:\s+(.*))?$")
+
+(def ^:private command-pattern ark-command-pattern)
 
 (def ^:private commands
      #{"help" "status" "players" "restart"})
+
+(def ^:private pal-commands
+     #{"update" "help"})
 
 (defn parse-command
   "Parse a message for !ark commands.
    Returns {:command :keyword :args [args]} or nil."
   [message]
-  (when-let [[_ cmd args] (re-matches command-pattern message)]
+  (when-let [[_ cmd args] (re-matches ark-command-pattern message)]
     (let [cmd-lower (str/lower-case cmd)]
       (when (commands cmd-lower)
+        {:command (keyword cmd-lower)
+         :args (when args (str/split (str/trim args) #"\s+"))}))))
+
+(defn parse-pal-command
+  "Parse a message for !pal commands.
+   Returns {:command :keyword :args [args]} or nil."
+  [message]
+  (when-let [[_ cmd args] (re-matches pal-command-pattern message)]
+    (let [cmd-lower (str/lower-case cmd)]
+      (when (pal-commands cmd-lower)
         {:command (keyword cmd-lower)
          :args (when args (str/split (str/trim args) #"\s+"))}))))
 
@@ -30,6 +46,16 @@
        "• `!ark players` - オンラインプレイヤーを確認\n"
        "• `!ark restart` - サーバーを再起動（注意して使用）\n\n"
        "**ℹ️ 注意:** サーバー再起動は完了まで数分かかる場合があります。"))
+
+(defn format-pal-help
+  "Format PalWorld help message."
+  []
+  (str "**🦎 PalWorldサーバー管理コマンド**\n\n"
+       "`!pal help` - このヘルプメッセージを表示\n"
+       "`!pal update` - PalWorldサーバーを最新バージョンに更新\n\n"
+       "**📋 使用例:**\n"
+       "• `!pal update` - Steamから最新buildidを取得して更新（確認あり）\n\n"
+       "**ℹ️ 注意:** 更新中はサーバーへの接続が一時的に切断される場合があります。"))
 
 (defn format-players
   "Format player list."
@@ -78,3 +104,23 @@
   "Format generic command error message."
   []
   "❌ コマンド処理中にエラーが発生しました。")
+
+(defn format-pal-update-started
+  "Format PalWorld update started message."
+  []
+  "🔄 PalWorldサーバーの更新を開始しています...")
+
+(defn format-pal-update-success
+  "Format PalWorld update success message."
+  []
+  "✅ PalWorldサーバーの更新ワークフローを開始しました！最新バージョンへの更新が完了するまでしばらくお待ちください。")
+
+(defn format-pal-update-failed
+  "Format PalWorld update failed message."
+  []
+  "❌ PalWorldサーバーの更新に失敗しました。GitHubトークンの設定やログを確認してください。")
+
+(defn format-pal-update-cancelled
+  "Format PalWorld update cancelled message."
+  []
+  "❌ PalWorldサーバーの更新をキャンセルしました。")

@@ -4,9 +4,10 @@
               [ark-discord-bot.core.status :as status]
               [ark-discord-bot.effects.discord :as discord]
               [ark-discord-bot.effects.gateway :as gateway]
+              [ark-discord-bot.effects.github :as github]
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
-              [clojure.core.async :as async :refer [go-loop alt! <!!]]
+              [clojure.core.async :as async :refer [go-loop alt! <!  <!!]]
               [integrant.core :as ig]))
 
 (defn- log [level msg]
@@ -56,6 +57,18 @@
               (commands/format-players-error))]
     (discord/send-message discord-client msg channel-id)))
 
+(defn- handle-pal-update-command [discord-client channel-id]
+  (discord/send-pal-update-confirmation discord-client channel-id))
+
+(defn- handle-pal-help-command [discord-client channel-id]
+  (discord/send-message discord-client (commands/format-pal-help) channel-id))
+
+(defn- handle-pal-command [cmd discord-client channel-id]
+  (case (:command cmd)
+    :update (handle-pal-update-command discord-client channel-id)
+    :help (handle-pal-help-command discord-client channel-id)
+    nil))
+
 (defn- handle-command [cmd discord-client k8s-client rcon-client config channel-id]
   (case (:command cmd)
     :help (handle-help-command discord-client channel-id)
@@ -78,7 +91,27 @@
         token interaction-id interaction-token
         (discord/build-interaction-update "ARK server restart cancelled."))))
 
-(defn- handle-interaction [interaction-data token k8s-client]
+(defn- execute-pal-update-confirm [token interaction-id interaction-token github-client config]
+  (<!! (discord/respond-to-interaction
+        token interaction-id interaction-token
+        (discord/build-pal-interaction-update (commands/format-pal-update-started))))
+  (if (nil? (:github-token config))
+    (log :error "GITHUB_TOKEN not configured - cannot dispatch PalWorld update workflow")
+    (let [result (<!! (github/dispatch-workflow
+                       github-client
+                       (:palserver-repo config)
+                       (:palserver-workflow config)
+                       (:palserver-branch config)))]
+      (if (:success result)
+        (log :info "PalWorld update workflow dispatched successfully")
+        (log :error (str "Failed to dispatch workflow: " (:error result)))))))
+
+(defn- execute-pal-update-cancel [token interaction-id interaction-token]
+  (<!! (discord/respond-to-interaction
+        token interaction-id interaction-token
+        (discord/build-pal-interaction-update (commands/format-pal-update-cancelled)))))
+
+(defn- handle-interaction [interaction-data token k8s-client github-client config]
   (when-let [{:keys [action interaction-id interaction-token]}
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
@@ -86,10 +119,14 @@
       :restart-confirm (execute-restart-confirm token interaction-id
                                                 interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
+      :pal-update-confirm (execute-pal-update-confirm token interaction-id
+                                                      interaction-token github-client config)
+      :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
 (defn- log-command-message [content]
-  (when (and content (re-find #"(?i)^!ark" content))
+  (when (and content (or (re-find #"(?i)^!ark" content)
+                         (re-find #"(?i)^!pal" content)))
     (log :debug (str "Received message: " (pr-str content)))))
 
 (defn- warn-empty-content [content is-bot?]
@@ -97,13 +134,22 @@
     (log :warn (str "Received message with empty content - "
                     "check Message Content Intent in Discord Developer Portal"))))
 
-(defn- try-execute-command [content discord-client k8s-client rcon-client config channel-id]
-  (when-let [cmd (commands/parse-command content)]
-    (log :info (str "Command: " (:command cmd)))
+(defn- try-execute-pal-command [content discord-client channel-id]
+  (when-let [cmd (commands/parse-pal-command content)]
+    (log :info (str "Pal command: " (:command cmd)))
     (try
-      (handle-command cmd discord-client k8s-client rcon-client config channel-id)
+      (handle-pal-command cmd discord-client channel-id)
       (catch Exception e
-        (log :error (str "Command error: " (.getMessage e)))))))
+        (log :error (str "Pal command error: " (.getMessage e)))))))
+
+(defn- try-execute-command [content discord-client k8s-client rcon-client config channel-id]
+  (or (when-let [cmd (commands/parse-command content)]
+        (log :info (str "Command: " (:command cmd)))
+        (try
+          (handle-command cmd discord-client k8s-client rcon-client config channel-id)
+          (catch Exception e
+            (log :error (str "Command error: " (.getMessage e))))))
+      (try-execute-pal-command content discord-client channel-id)))
 
 (defn- handle-message-event [msg discord-client k8s-client rcon-client config]
   (let [{:keys [content channel_id author]} msg
@@ -114,9 +160,9 @@
       (try-execute-command content discord-client k8s-client
                            rcon-client config channel_id))))
 
-(defn- handle-interaction-event [interaction-data token k8s-client]
+(defn- handle-interaction-event [interaction-data token k8s-client github-client config]
   (try
-    (handle-interaction interaction-data token k8s-client)
+    (handle-interaction interaction-data token k8s-client github-client config)
     (catch Exception e
       (log :error (str "Interaction error: " (.getMessage e))))))
 
@@ -131,7 +177,7 @@
     :message (handle-message-event (:data event) (:discord-client clients)
                                    (:k8s-client clients) (:rcon-client clients) config)
     :interaction (handle-interaction-event (:data event) (:discord-token config)
-                                           (:k8s-client clients))
+                                           (:k8s-client clients) (:github-client clients) config)
     :ready (handle-ready-event (:data event))
     nil))
 
@@ -159,12 +205,13 @@
     control-chan))
 
 (defmethod ig/init-key :ark/gateway-event-loop [_ {:keys [gateway discord-client k8s-client
-                                                          rcon-client config]}]
+                                                          rcon-client github-client config]}]
            (log :info "Starting gateway event loop...")
            (let [shutdown-atom (atom false)
                  clients {:discord-client discord-client
                           :k8s-client k8s-client
-                          :rcon-client rcon-client}
+                          :rcon-client rcon-client
+                          :github-client github-client}
                  control-chan (start-gateway-event-loop (:app-events-chan gateway)
                                                         clients config shutdown-atom)]
              {:control-chan control-chan

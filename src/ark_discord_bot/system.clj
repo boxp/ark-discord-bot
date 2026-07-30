@@ -6,6 +6,7 @@
      [ark-discord-bot.system.gateway]
      [ark-discord-bot.system.gateway-event-loop]
      [ark-discord-bot.system.gateway-state]
+     [ark-discord-bot.system.github]
      [ark-discord-bot.system.kubernetes]
      [ark-discord-bot.system.monitor-loop]
      [ark-discord-bot.system.monitor-state]
