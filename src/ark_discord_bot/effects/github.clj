@@ -33,7 +33,7 @@
   [client repo workflow-file ref]
   (async/go
     (let [path (str "/repos/" repo "/actions/workflows/" workflow-file "/dispatches")
-          resp (<! (send-request client :post path {:ref ref}))]
+          resp (async/<! (send-request client :post path {:ref ref}))]
       (if (= 204 (:status resp))
         {:success true}
         {:error (str "GitHub API error: " (:status resp) " " (:body resp))}))))
