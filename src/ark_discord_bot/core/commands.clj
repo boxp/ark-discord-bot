@@ -5,8 +5,6 @@
 (def ^:private ark-command-pattern #"(?i)^!ark\s+(\w+)(?:\s+(.*))?$")
 (def ^:private pal-command-pattern #"(?i)^!pal\s+(\w+)(?:\s+(.*))?$")
 
-(def ^:private command-pattern ark-command-pattern)
-
 (def ^:private commands
      #{"help" "status" "players" "restart"})
 

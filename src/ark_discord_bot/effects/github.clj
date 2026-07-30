@@ -12,15 +12,18 @@
   [token]
   {:token token})
 
+(defn- request-headers [client]
+  {"Authorization" (str "Bearer " (:token client))
+   "Content-Type" "application/json"
+   "Accept" "application/vnd.github+json"
+   "X-GitHub-Api-Version" "2022-11-28"})
+
 (defn- send-request
   "Send HTTP request to GitHub API. Returns a channel."
   [client method path body]
   (async/thread
     (let [url (str api-base path)
-          opts {:headers {"Authorization" (str "Bearer " (:token client))
-                          "Content-Type" "application/json"
-                          "Accept" "application/vnd.github+json"
-                          "X-GitHub-Api-Version" "2022-11-28"}
+          opts {:headers (request-headers client)
                 :body (when body (json/generate-string body))
                 :throw false}]
       (case method

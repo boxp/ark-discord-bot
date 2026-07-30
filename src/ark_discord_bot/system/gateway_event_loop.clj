@@ -7,7 +7,7 @@
               [ark-discord-bot.effects.github :as github]
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
-              [clojure.core.async :as async :refer [go-loop alt! <!  <!!]]
+              [clojure.core.async :as async :refer [go-loop alt! <!!]]
               [integrant.core :as ig]))
 
 (defn- log [level msg]
@@ -91,10 +91,7 @@
         token interaction-id interaction-token
         (discord/build-interaction-update "ARK server restart cancelled."))))
 
-(defn- execute-pal-update-confirm [token interaction-id interaction-token github-client config]
-  (<!! (discord/respond-to-interaction
-        token interaction-id interaction-token
-        (discord/build-pal-interaction-update (commands/format-pal-update-started))))
+(defn- dispatch-pal-workflow [github-client config]
   (if (nil? (:github-token config))
     (log :error "GITHUB_TOKEN not configured - cannot dispatch PalWorld update workflow")
     (let [result (<!! (github/dispatch-workflow
@@ -106,6 +103,12 @@
         (log :info "PalWorld update workflow dispatched successfully")
         (log :error (str "Failed to dispatch workflow: " (:error result)))))))
 
+(defn- execute-pal-update-confirm [token interaction-id interaction-token github-client config]
+  (<!! (discord/respond-to-interaction
+        token interaction-id interaction-token
+        (discord/build-pal-interaction-update (commands/format-pal-update-started))))
+  (dispatch-pal-workflow github-client config))
+
 (defn- execute-pal-update-cancel [token interaction-id interaction-token]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
@@ -116,11 +119,9 @@
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
     (case action
-      :restart-confirm (execute-restart-confirm token interaction-id
-                                                interaction-token k8s-client)
+      :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
-      :pal-update-confirm (execute-pal-update-confirm token interaction-id
-                                                      interaction-token github-client config)
+      :pal-update-confirm (execute-pal-update-confirm token interaction-id interaction-token github-client config)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
