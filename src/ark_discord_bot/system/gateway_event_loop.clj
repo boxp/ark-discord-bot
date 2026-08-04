@@ -91,18 +91,17 @@
         token interaction-id interaction-token
         (discord/build-interaction-update "ARK server restart cancelled."))))
 
+(defn- call-dispatch-workflow [github-client config]
+  (<!! (github/dispatch-workflow github-client (:palserver-repo config)
+                                 (:palserver-workflow config) (:palserver-branch config))))
+
 (defn- dispatch-pal-workflow [github-client config]
   (if (nil? (:github-token config))
-    (do (log :error "GITHUB_TOKEN not configured - cannot dispatch PalWorld update workflow")
-        {:error "GITHUB_TOKEN not configured"})
-    (let [result (<!! (github/dispatch-workflow
-                       github-client
-                       (:palserver-repo config)
-                       (:palserver-workflow config)
-                       (:palserver-branch config)))]
+    (do (log :error "GITHUB_TOKEN not configured") {:error "GITHUB_TOKEN not configured"})
+    (let [result (call-dispatch-workflow github-client config)]
       (if (:success result)
         (do (log :info "PalWorld update workflow dispatched successfully") {:success true})
-        (do (log :error (str "Failed to dispatch workflow: " (:error result)))
+        (do (log :error (str "Failed to dispatch: " (:error result)))
             {:error (:error result)})))))
 
 (defn- pal-update-result-message [result]
@@ -110,7 +109,8 @@
     (commands/format-pal-update-success)
     (commands/format-pal-update-failed)))
 
-(defn- execute-pal-update-confirm [token interaction-id interaction-token discord-client github-client config]
+(defn- execute-pal-update-confirm
+  [token interaction-id interaction-token discord-client github-client config]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-started))))
@@ -170,7 +170,8 @@
       (try-execute-command content discord-client k8s-client
                            rcon-client config channel_id))))
 
-(defn- handle-interaction-event [interaction-data token k8s-client github-client discord-client config]
+(defn- handle-interaction-event
+  [interaction-data token k8s-client github-client discord-client config]
   (try
     (handle-interaction interaction-data token k8s-client github-client discord-client config)
     (catch Exception e
