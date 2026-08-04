@@ -7,7 +7,7 @@
               [ark-discord-bot.effects.github :as github]
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
-              [clojure.core.async :as async :refer [go-loop alt! <!!]]
+              [clojure.core.async :as async :refer [go-loop alt! <! <!!]]
               [integrant.core :as ig]))
 
 (defn- log [level msg]
@@ -203,10 +203,11 @@
            @shutdown-atom)))
 
 (defn- process-gateway-event [event ch clients config]
-  (try
-    (dispatch-gateway-event (second [event ch]) clients config)
-    (catch Exception e
-      (log :error (str "Event processing error: " (.getMessage e))))))
+  (async/thread
+    (try
+      (dispatch-gateway-event (second [event ch]) clients config)
+      (catch Exception e
+        (log :error (str "Event processing error: " (.getMessage e)))))))
 
 (defn start-gateway-event-loop
   "Start event loop to process gateway events. Returns control channel."
@@ -216,7 +217,7 @@
       (let [[event ch] (alt! app-events-chan ([e] [:event e])
                              control-chan ([v] [:control v]))]
         (when (should-continue-event-loop? event ch shutdown-atom)
-          (process-gateway-event event ch clients config)
+          (<! (process-gateway-event event ch clients config))
           (recur))))
     control-chan))
 
