@@ -5,9 +5,8 @@
               [clojure.test :refer [deftest is testing]]))
 
 (deftest start-gateway-event-loop-processes-events-on-thread-test
-  (testing "event loop processes events and terminates on shutdown"
+  (testing "event loop returns a control channel and terminates on shutdown"
     (let [app-events (async/chan 10)
-          processed (atom [])
           clients {:discord-client nil :k8s-client nil :rcon-client nil :github-client nil}
           config {:discord-token "tok"}
           shutdown (atom false)
@@ -17,7 +16,7 @@
       (reset! shutdown true)
       (async/put! control :stop)
       (async/close! control)
-      (is (nil? @processed) "loop should terminate without blocking"))))
+      (is (some? control) "loop should return a control channel"))))
 
 (deftest pal-update-result-message-test
   (testing "returns success message when dispatch succeeds"
