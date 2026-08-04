@@ -64,7 +64,8 @@
   [action data]
   {:action action
    :interaction-id (:id data)
-   :interaction-token (:token data)})
+   :interaction-token (:token data)
+   :channel-id (:channel_id data)})
 
 (defn parse-interaction
   "Parse interaction data from INTERACTION_CREATE event.

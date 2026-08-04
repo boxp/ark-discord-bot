@@ -110,12 +110,12 @@
     (commands/format-pal-update-failed)))
 
 (defn- execute-pal-update-confirm
-  [token interaction-id interaction-token discord-client github-client config]
+  [token interaction-id interaction-token channel-id discord-client github-client config]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-started))))
   (let [result (dispatch-pal-workflow github-client config)]
-    (<!! (discord/send-message discord-client (pal-update-result-message result)))))
+    (<!! (discord/send-message discord-client (pal-update-result-message result) channel-id))))
 
 (defn- execute-pal-update-cancel [token interaction-id interaction-token]
   (<!! (discord/respond-to-interaction
@@ -123,14 +123,14 @@
         (discord/build-pal-interaction-update (commands/format-pal-update-cancelled)))))
 
 (defn- handle-interaction [interaction-data token k8s-client github-client discord-client config]
-  (when-let [{:keys [action interaction-id interaction-token]}
+  (when-let [{:keys [action interaction-id interaction-token channel-id]}
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
     (case action
       :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
       :pal-update-confirm (execute-pal-update-confirm token interaction-id interaction-token
-                                                      discord-client github-client config)
+                                                      channel-id discord-client github-client config)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
