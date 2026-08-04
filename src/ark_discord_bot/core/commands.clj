@@ -122,3 +122,8 @@
   "Format PalWorld update cancelled message."
   []
   "❌ PalWorldサーバーの更新をキャンセルしました。")
+
+(defn format-pal-update-in-progress
+  "Format PalWorld update already-in-progress message."
+  []
+  "⚠️ PalWorldサーバーの更新は既に実行中です。完了までお待ちください。")

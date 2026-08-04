@@ -109,32 +109,57 @@
     (commands/format-pal-update-success)
     (commands/format-pal-update-failed)))
 
-(defn- execute-pal-update-confirm
-  [token interaction-id interaction-token channel-id discord-client github-client config]
+(defn- try-acquire-pal-update-lock
+  "Atomically acquire the pal update in-progress lock.
+   Returns true if acquired (was false), false if already in progress."
+  [in-progress?]
+  (compare-and-set! in-progress? false true))
+
+(defn- respond-already-in-progress [token interaction-id interaction-token]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
-        (discord/build-pal-interaction-update (commands/format-pal-update-started))))
-  (let [result (dispatch-pal-workflow github-client config)]
-    (<!! (discord/send-message discord-client (pal-update-result-message result) channel-id))))
+        (discord/build-pal-interaction-update (commands/format-pal-update-in-progress)))))
+
+(defn- run-pal-update-workflow
+  [token interaction-id interaction-token channel-id
+   discord-client github-client config in-progress?]
+  (try
+    (<!! (discord/respond-to-interaction
+          token interaction-id interaction-token
+          (discord/build-pal-interaction-update (commands/format-pal-update-started))))
+    (let [result (dispatch-pal-workflow github-client config)]
+      (<!! (discord/send-message discord-client (pal-update-result-message result) channel-id)))
+    (finally
+      (reset! in-progress? false))))
+
+(defn- execute-pal-update-confirm
+  [token interaction-id interaction-token channel-id
+   discord-client github-client config in-progress?]
+  (if (try-acquire-pal-update-lock in-progress?)
+    (run-pal-update-workflow token interaction-id interaction-token channel-id
+                             discord-client github-client config in-progress?)
+    (respond-already-in-progress token interaction-id interaction-token)))
 
 (defn- execute-pal-update-cancel [token interaction-id interaction-token]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-cancelled)))))
 
-(defn- run-pal-update [interaction token discord-client github-client config]
+(defn- run-pal-update [interaction token discord-client github-client config in-progress?]
   (let [{:keys [interaction-id interaction-token channel-id]} interaction]
     (execute-pal-update-confirm token interaction-id interaction-token
-                                channel-id discord-client github-client config)))
+                                channel-id discord-client github-client config in-progress?)))
 
-(defn- handle-interaction [interaction-data token k8s-client github-client discord-client config]
+(defn- handle-interaction
+  [interaction-data token k8s-client github-client discord-client in-progress? config]
   (when-let [{:keys [action interaction-id interaction-token] :as interaction}
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
     (case action
       :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
-      :pal-update-confirm (run-pal-update interaction token discord-client github-client config)
+      :pal-update-confirm
+      (run-pal-update interaction token discord-client github-client config in-progress?)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
@@ -175,9 +200,10 @@
                            rcon-client config channel_id))))
 
 (defn- handle-interaction-event
-  [interaction-data token k8s-client github-client discord-client config]
+  [interaction-data token k8s-client github-client discord-client in-progress? config]
   (try
-    (handle-interaction interaction-data token k8s-client github-client discord-client config)
+    (handle-interaction interaction-data token k8s-client github-client
+                        discord-client in-progress? config)
     (catch Exception e
       (log :error (str "Interaction error: " (.getMessage e))))))
 
@@ -193,7 +219,8 @@
                                    (:k8s-client clients) (:rcon-client clients) config)
     :interaction (handle-interaction-event (:data event) (:discord-token config)
                                            (:k8s-client clients) (:github-client clients)
-                                           (:discord-client clients) config)
+                                           (:discord-client clients)
+                                           (:pal-update-in-progress? clients) config)
     :ready (handle-ready-event (:data event))
     nil))
 
@@ -225,10 +252,12 @@
                                                           rcon-client github-client config]}]
            (log :info "Starting gateway event loop...")
            (let [shutdown-atom (atom false)
+                 pal-update-in-progress? (atom false)
                  clients {:discord-client discord-client
                           :k8s-client k8s-client
                           :rcon-client rcon-client
-                          :github-client github-client}
+                          :github-client github-client
+                          :pal-update-in-progress? pal-update-in-progress?}
                  control-chan (start-gateway-event-loop (:app-events-chan gateway)
                                                         clients config shutdown-atom)]
              {:control-chan control-chan

@@ -18,6 +18,20 @@
       (async/close! control)
       (is (some? control) "loop should return a control channel"))))
 
+(deftest try-acquire-pal-update-lock-test
+  (testing "acquires lock when not in progress and sets flag to true"
+    (let [in-progress? (atom false)]
+      (is (true? (#'event-loop/try-acquire-pal-update-lock in-progress?)))
+      (is (true? @in-progress?))))
+  (testing "returns false when already in progress"
+    (let [in-progress? (atom true)]
+      (is (false? (#'event-loop/try-acquire-pal-update-lock in-progress?)))
+      (is (true? @in-progress?))))
+  (testing "second caller returns false while first holds lock"
+    (let [in-progress? (atom false)]
+      (is (true? (#'event-loop/try-acquire-pal-update-lock in-progress?)))
+      (is (false? (#'event-loop/try-acquire-pal-update-lock in-progress?))))))
+
 (deftest pal-update-result-message-test
   (testing "returns success message when dispatch succeeds"
     (let [msg (#'event-loop/pal-update-result-message {:success true})]
