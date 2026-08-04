@@ -122,16 +122,19 @@
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-cancelled)))))
 
+(defn- run-pal-update [interaction token discord-client github-client config]
+  (let [{:keys [interaction-id interaction-token channel-id]} interaction]
+    (execute-pal-update-confirm token interaction-id interaction-token
+                                channel-id discord-client github-client config)))
+
 (defn- handle-interaction [interaction-data token k8s-client github-client discord-client config]
-  (when-let [{:keys [action interaction-id interaction-token channel-id]}
+  (when-let [{:keys [action interaction-id interaction-token] :as interaction}
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
     (case action
       :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
-      :pal-update-confirm (execute-pal-update-confirm token interaction-id interaction-token
-                                                      channel-id discord-client
-                                                      github-client config)
+      :pal-update-confirm (run-pal-update interaction token discord-client github-client config)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
