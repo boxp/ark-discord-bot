@@ -93,28 +93,36 @@
 
 (defn- dispatch-pal-workflow [github-client config]
   (if (nil? (:github-token config))
-    (log :error "GITHUB_TOKEN not configured - cannot dispatch PalWorld update workflow")
+    (do (log :error "GITHUB_TOKEN not configured - cannot dispatch PalWorld update workflow")
+        {:error "GITHUB_TOKEN not configured"})
     (let [result (<!! (github/dispatch-workflow
                        github-client
                        (:palserver-repo config)
                        (:palserver-workflow config)
                        (:palserver-branch config)))]
       (if (:success result)
-        (log :info "PalWorld update workflow dispatched successfully")
-        (log :error (str "Failed to dispatch workflow: " (:error result)))))))
+        (do (log :info "PalWorld update workflow dispatched successfully") {:success true})
+        (do (log :error (str "Failed to dispatch workflow: " (:error result)))
+            {:error (:error result)})))))
 
-(defn- execute-pal-update-confirm [token interaction-id interaction-token github-client config]
+(defn- pal-update-result-message [result]
+  (if (:success result)
+    (commands/format-pal-update-success)
+    (commands/format-pal-update-failed)))
+
+(defn- execute-pal-update-confirm [token interaction-id interaction-token discord-client github-client config]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-started))))
-  (dispatch-pal-workflow github-client config))
+  (let [result (dispatch-pal-workflow github-client config)]
+    (<!! (discord/send-message discord-client (pal-update-result-message result)))))
 
 (defn- execute-pal-update-cancel [token interaction-id interaction-token]
   (<!! (discord/respond-to-interaction
         token interaction-id interaction-token
         (discord/build-pal-interaction-update (commands/format-pal-update-cancelled)))))
 
-(defn- handle-interaction [interaction-data token k8s-client github-client config]
+(defn- handle-interaction [interaction-data token k8s-client github-client discord-client config]
   (when-let [{:keys [action interaction-id interaction-token]}
              (gateway/parse-interaction interaction-data)]
     (log :info (str "Interaction: " action))
@@ -122,7 +130,7 @@
       :restart-confirm (execute-restart-confirm token interaction-id interaction-token k8s-client)
       :restart-cancel (execute-restart-cancel token interaction-id interaction-token)
       :pal-update-confirm (execute-pal-update-confirm token interaction-id interaction-token
-                                                      github-client config)
+                                                      discord-client github-client config)
       :pal-update-cancel (execute-pal-update-cancel token interaction-id interaction-token)
       nil)))
 
@@ -162,9 +170,9 @@
       (try-execute-command content discord-client k8s-client
                            rcon-client config channel_id))))
 
-(defn- handle-interaction-event [interaction-data token k8s-client github-client config]
+(defn- handle-interaction-event [interaction-data token k8s-client github-client discord-client config]
   (try
-    (handle-interaction interaction-data token k8s-client github-client config)
+    (handle-interaction interaction-data token k8s-client github-client discord-client config)
     (catch Exception e
       (log :error (str "Interaction error: " (.getMessage e))))))
 
@@ -179,7 +187,8 @@
     :message (handle-message-event (:data event) (:discord-client clients)
                                    (:k8s-client clients) (:rcon-client clients) config)
     :interaction (handle-interaction-event (:data event) (:discord-token config)
-                                           (:k8s-client clients) (:github-client clients) config)
+                                           (:k8s-client clients) (:github-client clients)
+                                           (:discord-client clients) config)
     :ready (handle-ready-event (:data event))
     nil))
 
