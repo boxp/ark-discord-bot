@@ -5,6 +5,7 @@ resources:
 - namespace.yaml
 - configmap.yaml
 - secret.yaml
+- external-secret.yaml
 - rbac.yaml
 - deployment.yaml
 
