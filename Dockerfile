@@ -25,6 +25,7 @@ WORKDIR /build
 COPY --from=builder /build/target/*-standalone.jar /build/app.jar
 
 # Build native image with Clojure-optimized settings
+# -J-XX:-UseContainerSupport disables JVM cgroup detection that fails in BuildKit
 RUN native-image \
     --initialize-at-build-time \
     --no-fallback \
@@ -33,6 +34,7 @@ RUN native-image \
     -H:IncludeResources=config.edn \
     --enable-http \
     --enable-https \
+    -J-XX:-UseContainerSupport \
     -jar /build/app.jar \
     ark-discord-bot
 
