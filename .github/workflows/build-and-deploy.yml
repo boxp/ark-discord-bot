@@ -27,9 +27,19 @@ env:
   AWS_REGION: ap-northeast-1
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Build Docker image
+      run: docker build --tag ark-discord-bot:ci .
+
+  push:
+    needs: build
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
@@ -62,13 +72,11 @@ jobs:
         echo "Generated image tag: ${IMAGE_TAG}"
         echo "Generated image URI: ${IMAGE_URI}"
 
-    - name: Build Docker image
+    - name: Build and push Docker image
       run: |
         docker build \
           --tag ${{ steps.image-info.outputs.image-uri }} \
           --tag ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest \
           .
-
-    - name: Push image to Amazon ECR
-      run: |
         docker push ${{ steps.image-info.outputs.image-uri }}
+        docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
