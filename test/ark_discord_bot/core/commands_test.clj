@@ -54,5 +54,11 @@
     (let [result (commands/format-players [])]
       (is (str/includes? result "オンラインのプレイヤーはいません")))))
 
+(deftest test-format-pal-update-in-progress
+  (testing "format-pal-update-in-progress returns in-progress message with warning emoji"
+    (let [msg (commands/format-pal-update-in-progress)]
+      (is (str/includes? msg "⚠️"))
+      (is (str/includes? msg "実行中")))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.commands-test)

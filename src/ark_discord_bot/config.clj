@@ -70,6 +70,14 @@
                                    (:failure-threshold default-config))
      :log-level (get-env "LOG_LEVEL" (:log-level default-config))}))
 
+(defn- load-github-config
+  "Load GitHub-related configuration for PalWorld update."
+  []
+  {:github-token (get-env "GITHUB_TOKEN")
+   :palserver-repo (get-env "PALSERVER_GITHUB_REPO" "boxp/palserver")
+   :palserver-workflow (get-env "PALSERVER_WORKFLOW" "check-palworld-update.yml")
+   :palserver-branch (get-env "PALSERVER_BRANCH" "main")})
+
 (defn load-config
   "Load configuration from environment variables.
    Environment variable names match the Python implementation."
@@ -77,7 +85,8 @@
   (merge (load-discord-config)
          (load-k8s-config)
          (load-rcon-config)
-         (load-monitor-config)))
+         (load-monitor-config)
+         (load-github-config)))
 
 (defn validate-config
   "Validate configuration. Returns config or throws on error."

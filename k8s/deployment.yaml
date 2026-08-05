@@ -25,6 +25,8 @@ spec:
             name: ark-discord-bot-config
         - secretRef:
             name: ark-discord-bot-secret
+        - secretRef:
+            name: ark-discord-bot-github-secret
         resources:
           requests:
             memory: "128Mi"

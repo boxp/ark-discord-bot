@@ -20,21 +20,36 @@
     (let [data {:type 3  ;; MESSAGE_COMPONENT
                 :data {:custom_id "restart_confirm"}
                 :id "123"
-                :token "token123"}
+                :token "token123"
+                :channel_id "ch-999"}
           result (gateway/parse-interaction data)]
       (is (= :restart-confirm (:action result)))
       (is (= "123" (:interaction-id result)))
-      (is (= "token123" (:interaction-token result))))))
+      (is (= "token123" (:interaction-token result)))
+      (is (= "ch-999" (:channel-id result))))))
 
 (deftest test-parse-interaction-restart-cancel
   (testing "parse-interaction extracts restart_cancel"
     (let [data {:type 3
                 :data {:custom_id "restart_cancel"}
                 :id "456"
-                :token "token456"}
+                :token "token456"
+                :channel_id "ch-888"}
           result (gateway/parse-interaction data)]
       (is (= :restart-cancel (:action result)))
-      (is (= "456" (:interaction-id result))))))
+      (is (= "456" (:interaction-id result)))
+      (is (= "ch-888" (:channel-id result))))))
+
+(deftest test-parse-interaction-pal-update-confirm-channel-id
+  (testing "parse-interaction includes channel-id for pal_update_confirm"
+    (let [data {:type 3
+                :data {:custom_id "pal_update_confirm"}
+                :id "789"
+                :token "token789"
+                :channel_id "ch-777"}
+          result (gateway/parse-interaction data)]
+      (is (= :pal-update-confirm (:action result)))
+      (is (= "ch-777" (:channel-id result))))))
 
 (deftest test-parse-interaction-unknown
   (testing "parse-interaction returns nil for unknown"

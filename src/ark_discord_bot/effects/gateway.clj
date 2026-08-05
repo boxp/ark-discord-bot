@@ -64,17 +64,20 @@
   [action data]
   {:action action
    :interaction-id (:id data)
-   :interaction-token (:token data)})
+   :interaction-token (:token data)
+   :channel-id (:channel_id data)})
 
 (defn parse-interaction
   "Parse interaction data from INTERACTION_CREATE event.
-   Returns {:action :restart-confirm|:restart-cancel
+   Returns {:action :restart-confirm|:restart-cancel|:pal-update-confirm|:pal-update-cancel
             :interaction-id :interaction-token} or nil."
   [data]
   (when (= 3 (:type data))  ;; MESSAGE_COMPONENT type
     (case (get-in data [:data :custom_id])
       "restart_confirm" (build-interaction-result :restart-confirm data)
       "restart_cancel" (build-interaction-result :restart-cancel data)
+      "pal_update_confirm" (build-interaction-result :pal-update-confirm data)
+      "pal_update_cancel" (build-interaction-result :pal-update-cancel data)
       nil)))
 
 (def ^:private reconnect-initial-delay-ms 1000)

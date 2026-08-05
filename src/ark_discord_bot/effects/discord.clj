@@ -139,6 +139,56 @@
                    (str "/channels/" channel-id "/messages")
                    {:embeds [embed] :components components}))))
 
+(defn- build-pal-update-confirmation-embed
+  "Build the confirmation embed for PalWorld update."
+  []
+  {:title "⚠️ PalWorldサーバー更新の確認"
+   :description (str "本当にPalWorldサーバーを更新しますか？\n\n"
+                     "⚠️ **注意**: Steamから最新のbuildidを確認し、"
+                     "更新がある場合はサーバーイメージを自動ビルドします。\n"
+                     "更新中はサーバーへの接続が一時的に切断される場合があります。")
+   :color 0x00BFFF})
+
+(defn- build-pal-update-buttons
+  "Build the PalWorld update confirmation buttons."
+  []
+  [{:type 2 :style 3 :label "更新する"
+    :emoji {:name "🔄"} :custom_id "pal_update_confirm"}
+   {:type 2 :style 2 :label "キャンセル"
+    :emoji {:name "❌"} :custom_id "pal_update_cancel"}])
+
+(defn build-pal-update-confirmation
+  "Build PalWorld update confirmation embed with buttons."
+  []
+  {:embed (build-pal-update-confirmation-embed)
+   :components [{:type 1 :components (build-pal-update-buttons)}]})
+
+(defn- build-disabled-pal-update-buttons
+  "Build disabled PalWorld update buttons for interaction update."
+  []
+  [{:type 2 :style 3 :label "更新する" :emoji {:name "🔄"}
+    :custom_id "pal_update_confirm" :disabled true}
+   {:type 2 :style 2 :label "キャンセル" :emoji {:name "❌"}
+    :custom_id "pal_update_cancel" :disabled true}])
+
+(defn build-pal-interaction-update
+  "Build PalWorld interaction update message response with disabled buttons."
+  [content]
+  {:type 7  ;; UPDATE_MESSAGE
+   :data {:content content
+          :components [{:type 1 :components (build-disabled-pal-update-buttons)}]}})
+
+(defn send-pal-update-confirmation
+  "Send PalWorld update confirmation with buttons.
+   If channel-id is not provided, uses the client's default channel."
+  ([client]
+   (send-pal-update-confirmation client (:channel-id client)))
+  ([client channel-id]
+   (let [{:keys [embed components]} (build-pal-update-confirmation)]
+     (send-request client :post
+                   (str "/channels/" channel-id "/messages")
+                   {:embeds [embed] :components components}))))
+
 (defn respond-to-interaction
   "Respond to a Discord interaction. Returns a channel.
    Note: Bot token not needed for interaction responses."

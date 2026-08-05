@@ -4,6 +4,7 @@
  :ark/discord-client {:config #ig/ref :ark/config}
  :ark/k8s-client {:config #ig/ref :ark/config}
  :ark/rcon-client {:config #ig/ref :ark/config}
+ :ark/github-client {:config #ig/ref :ark/config}
 
  :ark/gateway-state {}
  :ark/gateway {:config #ig/ref :ark/config
@@ -23,4 +24,5 @@
   :discord-client #ig/ref :ark/discord-client
   :k8s-client #ig/ref :ark/k8s-client
   :rcon-client #ig/ref :ark/rcon-client
+  :github-client #ig/ref :ark/github-client
   :config #ig/ref :ark/config}}
