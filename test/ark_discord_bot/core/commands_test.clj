@@ -60,5 +60,18 @@
       (is (str/includes? msg "⚠️"))
       (is (str/includes? msg "実行中")))))
 
+(deftest test-format-pal-update-failed
+  (testing "returns failure message with error emoji when called with no args"
+    (let [msg (commands/format-pal-update-failed)]
+      (is (str/includes? msg "❌"))))
+  (testing "includes reason in failure message when reason is provided"
+    (let [msg (commands/format-pal-update-failed "GITHUB_TOKEN not configured")]
+      (is (str/includes? msg "❌"))
+      (is (str/includes? msg "GITHUB_TOKEN not configured"))))
+  (testing "includes API error detail when GitHub API error is provided"
+    (let [msg (commands/format-pal-update-failed "GitHub API error: 401")]
+      (is (str/includes? msg "❌"))
+      (is (str/includes? msg "GitHub API error: 401")))))
+
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.commands-test)

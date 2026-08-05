@@ -8,6 +8,7 @@
               [ark-discord-bot.effects.kubernetes :as k8s]
               [ark-discord-bot.effects.rcon :as rcon]
               [clojure.core.async :as async :refer [go-loop alt! <! <!!]]
+              [clojure.string :as str]
               [integrant.core :as ig]))
 
 (defn- log [level msg]
@@ -96,7 +97,7 @@
                                  (:palserver-workflow config) (:palserver-branch config))))
 
 (defn- dispatch-pal-workflow [github-client config]
-  (if (nil? (:github-token config))
+  (if (or (nil? (:github-token config)) (str/blank? (:github-token config)))
     (do (log :error "GITHUB_TOKEN not configured") {:error "GITHUB_TOKEN not configured"})
     (let [result (call-dispatch-workflow github-client config)]
       (if (:success result)
@@ -107,7 +108,7 @@
 (defn- pal-update-result-message [result]
   (if (:success result)
     (commands/format-pal-update-success)
-    (commands/format-pal-update-failed)))
+    (commands/format-pal-update-failed (:error result))))
 
 (defn- try-acquire-pal-update-lock
   "Atomically acquire the pal update in-progress lock.
