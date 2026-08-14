@@ -18,6 +18,11 @@
   (or (nil? (:last-status state))
       (not= (:last-status state) new-status)))
 
+(defn- failure-notification-sent?
+  "True when failure-count reached threshold, meaning a failure notification was sent."
+  [state]
+  (>= (:failure-count state) (:failure-threshold state)))
+
 (defn- recovery-cooldown-elapsed?
   "Check if enough time has passed since last running state."
   [state current-time-ms]
@@ -27,13 +32,15 @@
 
 (defn should-notify-with-debounce?
   "Check if notification should be sent with debounce.
-   Failures wait for threshold; recovery is suppressed within cooldown window."
+   Failures wait for threshold; recovery notifies if failure was reported
+   or cooldown has elapsed."
   [state new-status failure-count current-time-ms]
   (cond
     (nil? (:last-status state)) false
     (= :running new-status)
     (and (not= (:last-status state) :running)
-         (recovery-cooldown-elapsed? state current-time-ms))
+         (or (failure-notification-sent? state)
+             (recovery-cooldown-elapsed? state current-time-ms)))
     :else
     (= failure-count (:failure-threshold state))))
 
