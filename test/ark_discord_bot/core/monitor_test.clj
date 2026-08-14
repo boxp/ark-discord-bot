@@ -108,24 +108,18 @@
 (deftest test-recovery-debounce
   (testing "recovery notification is suppressed when server was down briefly"
     (let [base-time 1000000
-          ;; Server was running at base-time
           state (-> (monitor/create-state 3 default-cooldown-ms)
                     (monitor/update-state :running base-time)
-                    ;; Server goes down at base-time + 1000ms
-                    (monitor/update-state :starting (+ base-time 1000)))]
-      ;; Recovery after only 30 seconds - should be suppressed
-      (let [recovery-time (+ base-time 30000)]
-        (is (not (monitor/should-notify-with-debounce? state :running 0 recovery-time))))))
+                    (monitor/update-state :starting (+ base-time 1000)))
+          recovery-time (+ base-time 30000)]
+      (is (not (monitor/should-notify-with-debounce? state :running 0 recovery-time)))))
   (testing "recovery notification is sent when server was down long enough"
     (let [base-time 1000000
-          ;; Server was running at base-time
           state (-> (monitor/create-state 3 default-cooldown-ms)
                     (monitor/update-state :running base-time)
-                    ;; Server goes down
-                    (monitor/update-state :starting (+ base-time 1000)))]
-      ;; Recovery after 6 minutes (> 5 minute cooldown) - should notify
-      (let [recovery-time (+ base-time (* 6 60 1000))]
-        (is (monitor/should-notify-with-debounce? state :running 0 recovery-time)))))
+                    (monitor/update-state :starting (+ base-time 1000)))
+          recovery-time (+ base-time (* 6 60 1000))]
+      (is (monitor/should-notify-with-debounce? state :running 0 recovery-time))))
   (testing "first recovery (last-running-at nil) always notifies"
     (let [state (-> (monitor/create-state 3 default-cooldown-ms)
                     (monitor/update-state :starting 1000))]
@@ -135,20 +129,16 @@
     (let [base-time 1000000
           cooldown-ms 300000
           state (-> (monitor/create-state 3 cooldown-ms)
-                    ;; Server running, then down for 6 minutes, then recovers
                     (monitor/update-state :running base-time)
-                    (monitor/update-state :starting (+ base-time 1000)))]
-      (let [recovery-time (+ base-time (* 6 60 1000))]
-        ;; Should notify (server was down long enough)
-        (is (monitor/should-notify-with-debounce? state :running 0 recovery-time))
-        ;; After updating state at recovery-time, last-running-at is now recovery-time
-        (let [post-recovery-state (monitor/update-state state :running recovery-time)
-              ;; Server briefly down again and recovers 60 seconds later
-              second-recovery-time (+ recovery-time 60000)]
-          (is (= recovery-time (:last-running-at post-recovery-state)))
-          (is (not (monitor/should-notify-with-debounce?
-                    (monitor/update-state post-recovery-state :starting (+ recovery-time 1000))
-                    :running 0 second-recovery-time))))))))
+                    (monitor/update-state :starting (+ base-time 1000)))
+          recovery-time (+ base-time (* 6 60 1000))
+          post-recovery-state (monitor/update-state state :running recovery-time)
+          second-recovery-time (+ recovery-time 60000)]
+      (is (monitor/should-notify-with-debounce? state :running 0 recovery-time))
+      (is (= recovery-time (:last-running-at post-recovery-state)))
+      (is (not (monitor/should-notify-with-debounce?
+                (monitor/update-state post-recovery-state :starting (+ recovery-time 1000))
+                :running 0 second-recovery-time)))))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.monitor-test)

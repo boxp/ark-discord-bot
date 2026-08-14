@@ -57,7 +57,8 @@
         monitor-state @monitor-state-atom
         projected-count (calculate-projected-count monitor-state new-status)
         current-time-ms (System/currentTimeMillis)]
-    (when (monitor/should-notify-with-debounce? monitor-state new-status projected-count current-time-ms)
+    (when (monitor/should-notify-with-debounce?
+           monitor-state new-status projected-count current-time-ms)
       (notify-status-change discord-client new-status result))
     (update-monitor-state! monitor-state-atom new-status current-time-ms)))
 
