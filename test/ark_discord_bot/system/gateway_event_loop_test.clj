@@ -36,9 +36,11 @@
   (testing "returns success message when dispatch succeeds"
     (let [msg (#'event-loop/pal-update-result-message {:success true})]
       (is (str/includes? msg "✅"))))
-  (testing "returns failure message when dispatch fails with error"
+  (testing "returns failure message with error reason when dispatch fails"
     (let [msg (#'event-loop/pal-update-result-message {:error "GitHub API error: 403"})]
-      (is (str/includes? msg "❌"))))
-  (testing "returns failure message when github-token not configured"
+      (is (str/includes? msg "❌"))
+      (is (str/includes? msg "GitHub API error: 403"))))
+  (testing "returns failure message with not-configured reason"
     (let [msg (#'event-loop/pal-update-result-message {:error "GITHUB_TOKEN not configured"})]
-      (is (str/includes? msg "❌")))))
+      (is (str/includes? msg "❌"))
+      (is (str/includes? msg "GITHUB_TOKEN not configured")))))

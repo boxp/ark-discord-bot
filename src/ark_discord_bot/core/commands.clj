@@ -115,8 +115,12 @@
 
 (defn format-pal-update-failed
   "Format PalWorld update failed message."
-  []
-  "❌ PalWorldサーバーの更新に失敗しました。GitHubトークンの設定やログを確認してください。")
+  ([] (format-pal-update-failed nil))
+  ([reason]
+   (str "❌ PalWorldサーバーの更新に失敗しました。"
+        (when (and reason (not (str/blank? reason)))
+          (str "\n理由: " reason))
+        "\nGitHubトークンの設定やログを確認してください。")))
 
 (defn format-pal-update-cancelled
   "Format PalWorld update cancelled message."
