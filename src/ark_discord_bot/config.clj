@@ -32,6 +32,7 @@
       :rcon-timeout 10000
       :monitor-interval 30000  ; 30 seconds in milliseconds
       :failure-threshold 3
+      :recovery-cooldown-ms 300000  ; 5 minutes in milliseconds
       :log-level "INFO"})
 
 (defn- load-discord-config
@@ -68,6 +69,8 @@
                                           default-interval-sec))
      :failure-threshold (parse-int (get-env "FAILURE_THRESHOLD")
                                    (:failure-threshold default-config))
+     :recovery-cooldown-ms (* 1000 (parse-int (get-env "RECOVERY_COOLDOWN_SECONDS")
+                                              (/ (:recovery-cooldown-ms default-config) 1000)))
      :log-level (get-env "LOG_LEVEL" (:log-level default-config))}))
 
 (defn- load-github-config

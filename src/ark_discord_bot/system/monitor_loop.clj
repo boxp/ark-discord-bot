@@ -48,17 +48,19 @@
   (discord/send-status-message discord-client new-status
                                (status/format-status-message result)))
 
-(defn- update-monitor-state! [monitor-state-atom new-status]
-  (swap! monitor-state-atom monitor/update-state new-status))
+(defn- update-monitor-state! [monitor-state-atom new-status current-time-ms]
+  (swap! monitor-state-atom monitor/update-state new-status current-time-ms))
 
 (defn- execute-monitor-cycle [discord-client k8s-client rcon-client config monitor-state-atom]
   (let [result (check-status k8s-client rcon-client config)
         new-status (:status result)
         monitor-state @monitor-state-atom
-        projected-count (calculate-projected-count monitor-state new-status)]
-    (when (monitor/should-notify-with-debounce? monitor-state new-status projected-count)
+        projected-count (calculate-projected-count monitor-state new-status)
+        current-time-ms (System/currentTimeMillis)]
+    (when (monitor/should-notify-with-debounce?
+           monitor-state new-status projected-count current-time-ms)
       (notify-status-change discord-client new-status result))
-    (update-monitor-state! monitor-state-atom new-status)))
+    (update-monitor-state! monitor-state-atom new-status current-time-ms)))
 
 (defn- handle-monitor-error [e]
   (when (not (k8s/is-transient-error? e))
