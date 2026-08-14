@@ -1,8 +1,8 @@
 (ns ark-discord-bot.system.monitor-state
     "Integrant component for monitor state atom."
-    (:require [integrant.core :as ig]))
+    (:require [ark-discord-bot.core.monitor :as monitor]
+              [integrant.core :as ig]))
 
 (defmethod ig/init-key :ark/monitor-state [_ {:keys [config]}]
-           (atom {:last-status nil
-                  :failure-count 0
-                  :failure-threshold (:failure-threshold config)}))
+           (atom (monitor/create-state (:failure-threshold config)
+                                       (:recovery-cooldown-ms config))))

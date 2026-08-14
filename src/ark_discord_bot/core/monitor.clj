@@ -1,13 +1,16 @@
 (ns ark-discord-bot.core.monitor
     "Server monitor with debounce logic for notifications.
-   Implements failure threshold to avoid notification spam.")
+   Implements failure threshold to avoid notification spam.
+   Recovery notifications are suppressed when the server was only briefly non-running.")
 
 (defn create-state
   "Create initial monitor state."
-  [failure-threshold]
+  [failure-threshold recovery-cooldown-ms]
   {:last-status nil
    :failure-count 0
-   :failure-threshold failure-threshold})
+   :failure-threshold failure-threshold
+   :last-running-at nil
+   :recovery-cooldown-ms recovery-cooldown-ms})
 
 (defn should-notify?
   "Check if notification should be sent (no debounce)."
@@ -17,30 +20,38 @@
 
 (defn should-notify-with-debounce?
   "Check if notification should be sent with debounce.
-   For failures, waits until threshold is reached exactly once."
-  [state new-status failure-count]
+   For failures, waits until threshold is reached exactly once.
+   For recovery, suppresses notification if server was non-running for less than recovery-cooldown-ms."
+  [state new-status failure-count current-time-ms]
   (cond
     ;; Initial check (bot just started) - suppress notification
     (nil? (:last-status state))
     false
-    ;; Transitioning to success - immediate notification on change
+    ;; Transitioning to running - notify only if server was down long enough
     (= :running new-status)
-    (not= (:last-status state) :running)
+    (and (not= (:last-status state) :running)
+         (or (nil? (:last-running-at state))
+             (>= (- current-time-ms (:last-running-at state))
+                 (:recovery-cooldown-ms state))))
     ;; Failure state (new or continuing) - notify when threshold is hit exactly
     :else
     (= failure-count (:failure-threshold state))))
 
 (defn update-state
-  "Update monitor state with new status."
-  [state new-status]
+  "Update monitor state with new status and current timestamp."
+  [state new-status current-time-ms]
   (let [initial? (nil? (:last-status state))
         is-failure? (not= :running new-status)
         new-count (if (or (not is-failure?) initial?)
                     0
-                    (inc (:failure-count state)))]
+                    (inc (:failure-count state)))
+        new-last-running-at (if (= :running new-status)
+                              current-time-ms
+                              (:last-running-at state))]
     (assoc state
            :last-status new-status
-           :failure-count new-count)))
+           :failure-count new-count
+           :last-running-at new-last-running-at)))
 
 (defn projected-failure-count
   "Calculate projected failure count for the next state.
