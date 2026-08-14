@@ -138,7 +138,7 @@
       (is (= recovery-time (:last-running-at post-recovery-state)))
       (is (not (monitor/should-notify-with-debounce?
                 (monitor/update-state post-recovery-state :starting (+ recovery-time 1000))
-                :running 0 second-recovery-time)))))))
+                :running 0 second-recovery-time))))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.monitor-test)
