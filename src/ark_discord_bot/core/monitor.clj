@@ -18,22 +18,32 @@
   (or (nil? (:last-status state))
       (not= (:last-status state) new-status)))
 
+(defn- failure-notification-sent?
+  "True when failure-count has reached threshold, meaning a failure notification was sent."
+  [state]
+  (>= (:failure-count state) (:failure-threshold state)))
+
+(defn- should-notify-recovery?
+  "True when a recovery-to-running notification should be sent.
+   Always notifies if a failure notification was previously sent,
+   so users know the outage resolved even within the cooldown window."
+  [state current-time-ms]
+  (and (not= (:last-status state) :running)
+       (or (failure-notification-sent? state)
+           (nil? (:last-running-at state))
+           (>= (- current-time-ms (:last-running-at state))
+               (:recovery-cooldown-ms state)))))
+
 (defn should-notify-with-debounce?
   "Check if notification should be sent with debounce.
    For failures, waits until threshold is reached exactly once.
-   For recovery, suppresses notification if server was non-running for less than recovery-cooldown-ms."
+   For recovery, suppresses if server was briefly non-running and no failure notification was sent."
   [state new-status failure-count current-time-ms]
   (cond
-    ;; Initial check (bot just started) - suppress notification
     (nil? (:last-status state))
     false
-    ;; Transitioning to running - notify only if server was down long enough
     (= :running new-status)
-    (and (not= (:last-status state) :running)
-         (or (nil? (:last-running-at state))
-             (>= (- current-time-ms (:last-running-at state))
-                 (:recovery-cooldown-ms state))))
-    ;; Failure state (new or continuing) - notify when threshold is hit exactly
+    (should-notify-recovery? state current-time-ms)
     :else
     (= failure-count (:failure-threshold state))))
 

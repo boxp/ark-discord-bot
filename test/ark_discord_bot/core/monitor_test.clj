@@ -148,7 +148,18 @@
           (is (= recovery-time (:last-running-at post-recovery-state)))
           (is (not (monitor/should-notify-with-debounce?
                     (monitor/update-state post-recovery-state :starting (+ recovery-time 1000))
-                    :running 0 second-recovery-time))))))))
+                    :running 0 second-recovery-time)))))))
+  (testing "recovery notification is sent when failure notification was previously sent (within cooldown)"
+    (let [base-time 1000000
+          state (-> (monitor/create-state 3 default-cooldown-ms)
+                    (monitor/update-state :running base-time)
+                    (monitor/update-state :starting (+ base-time 30000))
+                    (monitor/update-state :starting (+ base-time 60000))
+                    (monitor/update-state :starting (+ base-time 90000)))]
+      ;; failure-count == failure-threshold means failure notification was sent
+      (is (= 3 (:failure-count state)))
+      ;; Recovery after 2 minutes (within 5-min cooldown) - must notify since failure was reported
+      (is (monitor/should-notify-with-debounce? state :running 0 (+ base-time (* 2 60 1000)))))))
 
 ;; Run tests when loaded
 (clojure.test/run-tests 'ark-discord-bot.core.monitor-test)
